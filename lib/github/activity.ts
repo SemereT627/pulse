@@ -18,18 +18,19 @@ export function branchesFor(source: Source): string[] {
 const HISTORY_FIELDS = `
   totalCount
   pageInfo { hasNextPage endCursor }
-  nodes { oid messageHeadline committedDate url additions deletions }
+  nodes { oid message committedDate url additions deletions }
 `;
 
 type HistoryConn = {
   pageInfo: { hasNextPage: boolean; endCursor: string | null };
-  nodes: { oid: string; messageHeadline: string; committedDate: string; url: string; additions: number; deletions: number }[];
+  nodes: { oid: string; message: string; committedDate: string; url: string; additions: number; deletions: number }[];
 };
 type RefResult = { target: { history?: HistoryConn } | null } | null;
 
 const toCommit = (n: HistoryConn["nodes"][number]): Commit => ({
   oid: n.oid,
-  message: n.messageHeadline,
+  // `messageHeadline` truncates at ~70 chars; take the full first line instead.
+  message: n.message.split("\n")[0].trim(),
   committedDate: n.committedDate,
   url: n.url,
   additions: n.additions,

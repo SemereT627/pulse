@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { deltas } from "@/lib/report/aggregate";
+import { toMarkdown } from "@/lib/report/markdown";
 import { getRateLimit, getSettings, includedSources, loadWeek } from "@/lib/report/load";
 import { addDays, previousWeek, weekContaining, weekFrom } from "@/lib/report/week";
 import { fmtAgo, fmtIn, fmtRange } from "@/lib/format";
 import { DayBars } from "./day-bars";
+import { ExportButtons } from "./export-buttons";
 import { RegenerateButton } from "./regenerate-button";
 import { RepoList } from "./repo-list";
 import { StatCards } from "./stat-cards";
@@ -60,9 +62,13 @@ export async function WeekView({ weekStart }: { weekStart?: string }) {
             <p className="font-mono text-xs text-muted">updated {fmtAgo(thisWeek.fetchedAt)}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <WeekPicker weeks={recentWeeks} selected={week.startDate} current={current.startDate} />
           <RegenerateButton weekStart={week.startDate} />
+          <ExportButtons
+            markdown={toMarkdown(stats, week, { author: process.env.REPORT_NAME })}
+            filename={`pulse-${week.startDate}_to_${week.endDate}.md`}
+          />
         </div>
       </header>
 
