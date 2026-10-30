@@ -60,7 +60,10 @@ async function TopbarUserMenu() {
 
 async function SidebarStatus() {
   const [settings, sources, rate] = await Promise.all([getSettings(), includedSources(), getRateLimit()]);
-  const used = rate ? 1 - rate.remaining / rate.limit : 0;
+  // The stored budget is from the last call; once its window has reset, the full limit is back.
+  const resetPassed = rate ? rate.resetAt.getTime() <= new Date().getTime() : false;
+  const remaining = rate ? (resetPassed ? rate.limit : rate.remaining) : 0;
+  const used = rate ? 1 - remaining / rate.limit : 0;
   // vercel.json runs the cron Fridays 12:00 UTC; show it in the report's timezone.
   const cronTime = new Intl.DateTimeFormat("en-US", {
     timeZone: settings.timezone,
@@ -88,7 +91,7 @@ async function SidebarStatus() {
           <div className="flex items-center justify-between">
             <dt>GitHub API</dt>
             <dd>
-              {fmtNumber(rate.remaining)} left · {fmtIn(rate.resetAt)}
+              {fmtNumber(remaining)} left{resetPassed ? "" : ` · ${fmtIn(rate.resetAt)}`}
             </dd>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">

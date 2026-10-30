@@ -75,7 +75,7 @@ export function AppShell({ sidebarFooter, topbarActions, children }: Props) {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -87,7 +87,8 @@ export function AppShell({ sidebarFooter, topbarActions, children }: Props) {
           <p className="truncate text-sm font-medium">{navItemFor(pathname)?.label ?? "Pulse"}</p>
           <div className="ml-auto flex items-center gap-2">{topbarActions}</div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-6 sm:px-6 sm:pt-8">{children}</main>
+        {/* Same side padding as the header, left-aligned, so page content lines up with the section title. */}
+        <main className="w-full max-w-[96rem] flex-1 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-8">{children}</main>
       </div>
     </div>
   );
