@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { aiEnabled } from "@/lib/ai/summary";
 import { generateReport } from "@/lib/report/generate";
 import { getSettings } from "@/lib/report/load";
 import { isValidDate, previousWeek, weekContaining, weekFrom } from "@/lib/report/week";
@@ -32,10 +33,11 @@ export async function GET(request: Request) {
     ? weekFrom(param, settings.timezone)
     : previousWeek(weekContaining(new Date(), settings.timezone, settings.weekStartDay));
 
-  const report = await generateReport(week, "cron");
+  const report = await generateReport(week, "cron", { withNarrative: aiEnabled() && settings.aiEnabled });
   return Response.json({
     week: `${report.weekStart}..${report.weekEnd}`,
     generatedAt: report.generatedAt,
     totals: (report.stats as { totals: unknown }).totals,
+    narrative: report.narrative ? `${report.narrative.length} chars (${report.narrativeModel})` : null,
   });
 }

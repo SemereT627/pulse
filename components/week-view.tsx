@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { aiEnabled } from "@/lib/ai/summary";
 import { deltas } from "@/lib/report/aggregate";
+import { getReport } from "@/lib/report/generate";
 import { toMarkdown } from "@/lib/report/markdown";
 import { getRateLimit, getSettings, includedSources, loadWeek } from "@/lib/report/load";
 import { addDays, previousWeek, weekContaining, weekFrom } from "@/lib/report/week";
@@ -9,6 +11,7 @@ import { ExportButtons } from "./export-buttons";
 import { RegenerateButton } from "./regenerate-button";
 import { RepoList } from "./repo-list";
 import { StatCards } from "./stat-cards";
+import { SummaryCard } from "./summary-card";
 import { WeekPicker } from "./week-picker";
 
 /** `weekStart` omitted = the week in progress. */
@@ -37,11 +40,14 @@ export async function WeekView({ weekStart }: { weekStart?: string }) {
   // A week in progress is compared with last week up to the same point, not the whole of it.
   const prev = previousWeek(week);
   const cutoff = isCurrent ? new Date(prev.start.getTime() + (now.getTime() - week.start.getTime())) : undefined;
-  const [thisWeek, lastWeek, rate] = await Promise.all([
+  const [thisWeek, lastWeek, rate, report] = await Promise.all([
     loadWeek(week, { sources }),
     loadWeek(prev, { sources, cutoff }),
     getRateLimit(),
+    getReport(week.startDate),
   ]);
+  const narrative = report?.narrative ?? null;
+  const showSummary = aiEnabled() && settings.aiEnabled;
   const { stats } = thisWeek;
   const recentWeeks = Array.from({ length: 12 }, (_, i) => addDays(current.startDate, -7 * i));
 
@@ -67,11 +73,20 @@ export async function WeekView({ weekStart }: { weekStart?: string }) {
           <WeekPicker weeks={recentWeeks} selected={week.startDate} current={current.startDate} />
           <RegenerateButton weekStart={week.startDate} />
           <ExportButtons
-            markdown={toMarkdown(stats, week, { author: process.env.REPORT_NAME })}
+            markdown={toMarkdown(stats, week, { author: process.env.REPORT_NAME, narrative })}
             filename={`pulse-${week.startDate}_to_${week.endDate}.md`}
           />
         </div>
       </header>
+
+      {showSummary && (
+        <SummaryCard
+          weekStart={week.startDate}
+          narrative={narrative}
+          hasActivity={stats.repos.length > 0}
+          isCurrent={isCurrent}
+        />
+      )}
 
       <StatCards
         deltas={deltas(stats.totals, lastWeek.stats.totals)}
