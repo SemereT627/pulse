@@ -81,3 +81,8 @@ export function previousWeek(week: WeekWindow): WeekWindow {
 export function daysOf(week: WeekWindow): string[] {
   return Array.from({ length: 7 }, (_, i) => addDays(week.startDate, i));
 }
+
+/** `?week=` for dashboard links that keep the selected week; empty for the week in progress. */
+export function weekQuery(weekStart: string, currentStart: string) {
+  return weekStart === currentStart ? "" : `?week=${weekStart}`;
+}

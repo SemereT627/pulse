@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
-import { writeSummaryAction } from "@/app/week/actions";
+import { writeSummaryAction } from "@/app/(app)/reports/actions";
 
 type Props = { weekStart: string; narrative: string | null; hasActivity: boolean; isCurrent: boolean };
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useTransition } from "react";
+import { RefreshIcon } from "@/components/icons";
+import { buttonClass } from "@/components/ui";
 import { syncReposAction } from "./actions";
 
 export function SyncButton() {
@@ -11,8 +13,9 @@ export function SyncButton() {
       type="button"
       disabled={pending}
       onClick={() => startTransition(() => syncReposAction())}
-      className="shrink-0 rounded-md border border-border px-3 py-2 font-mono text-xs transition-colors hover:bg-surface disabled:opacity-50"
+      className={buttonClass}
     >
+      <RefreshIcon className={`size-4 ${pending ? "animate-spin" : ""}`} />
       {pending ? "Syncing…" : "Sync from GitHub"}
     </button>
   );

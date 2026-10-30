@@ -1,13 +1,15 @@
 import { Suspense } from "react";
 import { signIn } from "@/auth";
+import { Logo } from "@/components/logo";
 
 export default function SignInPage({ searchParams }: PageProps<"/signin">) {
   return (
     <main className="flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">pulse</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Weekly GitHub report</h1>
+          <Logo className="[&_svg]:size-9 [&>span]:text-3xl" />
+          <h1 className="pt-4 font-display text-2xl font-semibold tracking-tight">Weekly GitHub report</h1>
+          <p className="text-sm text-muted">Your commits, PRs and reviews, Friday to Thursday.</p>
         </div>
 
         <Suspense>
@@ -22,7 +24,7 @@ export default function SignInPage({ searchParams }: PageProps<"/signin">) {
         >
           <button
             type="submit"
-            className="w-full rounded-md bg-foreground px-4 py-2.5 text-sm font-medium text-background transition-opacity hover:opacity-90"
+            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
           >
             Sign in with GitHub
           </button>

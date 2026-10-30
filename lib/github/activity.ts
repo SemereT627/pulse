@@ -1,6 +1,6 @@
 import "server-only";
 import type { Source } from "@/db/schema";
-import type { Commit, Issue, PullRequest, Release, RepoSnapshot, Review, UserSnapshot } from "@/lib/report/types";
+import { USER_SNAPSHOT_VERSION, type Commit, type Issue, type PullRequest, type Release, type RepoSnapshot, type Review, type UserSnapshot } from "@/lib/report/types";
 import type { WeekWindow } from "@/lib/report/week";
 import { gh, RATE_LIMIT_FIELDS } from "./client";
 
@@ -137,7 +137,11 @@ async function searchAll<T>(query: string, fragment: string): Promise<T[]> {
 const range = (week: WeekWindow) => `${week.start.toISOString().slice(0, 19)}Z..${week.end.toISOString().slice(0, 19)}Z`;
 
 export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; login: string }): Promise<UserSnapshot> {
-  type PrNode = Omit<PullRequest, "repo"> & { repository: { nameWithOwner: string } };
+  type Author = { __typename: string; login: string } | null;
+  type PrNode = Omit<PullRequest, "repo" | "reviewers"> & {
+    repository: { nameWithOwner: string };
+    latestReviews: { nodes: { author: Author }[] };
+  };
   type IssueNode = {
     number: number;
     title: string;
@@ -155,7 +159,13 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
           nodes: {
             occurredAt: string;
             pullRequestReview: { state: string };
-            pullRequest: { number: number; title: string; url: string; repository: { nameWithOwner: string } };
+            pullRequest: {
+              number: number;
+              title: string;
+              url: string;
+              author: Author;
+              repository: { nameWithOwner: string };
+            };
           }[];
         };
       };
@@ -169,6 +179,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
       `... on PullRequest {
         number title body url state isDraft createdAt mergedAt closedAt additions deletions
         repository { nameWithOwner }
+        latestReviews(first: 20) { nodes { author { __typename login } } }
       }`,
     ),
     searchAll<IssueNode>(
@@ -188,7 +199,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
               nodes {
                 occurredAt
                 pullRequestReview { state }
-                pullRequest { number title url repository { nameWithOwner } }
+                pullRequest { number title url author { __typename login } repository { nameWithOwner } }
               }
             }
           }
@@ -200,10 +211,13 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
   ]);
 
   const me = viewer.login.toLowerCase();
-  const prs: PullRequest[] = prNodes.map(({ repository, body, ...pr }) => ({
+  // Bots (dependabot, review apps) aren't people you worked with.
+  const person = (a: Author) => (a?.__typename === "User" && a.login.toLowerCase() !== me ? a.login : null);
+  const prs: PullRequest[] = prNodes.map(({ repository, body, latestReviews, ...pr }) => ({
     ...pr,
     body: (body ?? "").trim().slice(0, 2000),
     repo: repository.nameWithOwner,
+    reviewers: [...new Set(latestReviews.nodes.map((r) => person(r.author)).filter((l) => l !== null))],
   }));
   const issues: Issue[] = issueNodes.map((i) => ({
     number: i.number,
@@ -222,7 +236,8 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
     prNumber: n.pullRequest.number,
     prTitle: n.pullRequest.title,
     prUrl: n.pullRequest.url,
+    prAuthor: person(n.pullRequest.author),
   }));
 
-  return { prs, reviews, issues };
+  return { v: USER_SNAPSHOT_VERSION, prs, reviews, issues };
 }

@@ -21,14 +21,18 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 - `db/schema.ts`: `settings` and `rate_limit` (single row, id 1), `sources` (repos + `included` + `extraBranches`), `snapshots` (raw GitHub data per week; key `repo:<id>` or `user`), `reports` (one row per week: stats, markdown, narrative).
 - `lib/github/`: `client.ts` (`gh()` wrapper records rate limit after each call), `repos.ts` (repo discovery/sync), `activity.ts` (batched commit/release queries, PR/issue search, reviews via contributionsCollection).
 - `lib/report/`: pure `week.ts`, `aggregate.ts`, `markdown.ts` (unit-tested); `load.ts` (snapshot cache: in-progress week refetches after 15 min, branch-config change refetches that repo); `generate.ts` (writes `reports` rows).
+- `lib/report/collaborators.ts`: pure; people from my PRs' reviewers + authors of PRs I reviewed (Contributors page). `UserSnapshot.v` (`USER_SNAPSHOT_VERSION`) forces a refetch of cached user snapshots when fields are added.
+- `lib/report/selected.ts`: `selectedWeek(searchParams)` resolves `?week=YYYY-MM-DD` (snapped, future → current); every week-scoped page uses it.
 - `lib/ai/summary.ts`: narrative prompt + call.
-- UI: `app/page.tsx` (current week), `app/week/[weekStart]`, `app/sources`, `components/week-view.tsx` and friends.
+- UI: dashboard shell in `app/(app)/layout.tsx` + `components/shell/` (sidebar, top bar with week picker and user menu, mobile drawer). Sections: `/` Overview, `/reports` (report + archive), `/repositories` (activity) and `/repositories/manage` (tracked repos), `/contributors`, `/settings` (cron/AI toggles, connection status). Selected week lives in `?week=`; sidebar links carry it. Old `/week/:week` and `/sources` redirect in `next.config.ts`.
+- Brand (from the logo canvas https://claude.ai/artifact/Xvn25eiwCSsVJHjH9P9XSR): 7-bar mark (`components/logo.tsx`), 3-bar favicon (`app/icon.svg`), ink `#0E100F` + lime `#C6F36B` (light: `#F6F7F3` + `#3B7D10`), Space Grotesk display, JetBrains Mono data.
 - `app/api/cron/weekly/route.ts`: `Authorization: Bearer $CRON_SECRET`; `?week=YYYY-MM-DD` regenerates a given week.
 
 ## Conventions and gotchas
 
 - With Cache Components, anything reading the session, `params`, `searchParams`, or the DB must sit inside `<Suspense>`; otherwise the build fails.
 - Read `node_modules/next/dist/docs/` before using Next APIs; this Next version differs from older training data.
+- `auth()` uses crypto, so call `await connection()` before it in server components, or prerendering errors.
 - Lint flags `Date.now()` during render; read `new Date()` once instead.
 - `.env.local` holds secrets and contains an unquoted URL with `&`, so don't `source` it in a shell; load it with dotenv.
 - `.smoke/` (gitignored, lint-ignored) holds local smoke scripts: `vitest run -c .smoke/vitest.config.mts` runs fetchers against real GitHub/Neon with `server-only` stubbed.
@@ -41,10 +45,10 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 
 ## Status (2026-10-30)
 
-Done and pushed: sign-in, sources page, fetching + cache, aggregation (17 tests), dashboard, Markdown export, cron, AI summary.
+Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-section dashboard (sidebar, Overview/Reports/Repositories/Contributors/Settings), Markdown export, cron, AI summary. 20 tests.
 
 Next:
-- AI summary not yet run live: needs `AI_ENABLED=true` and `ANTHROPIC_API_KEY` in `.env.local`.
+- AI summary not yet run live: needs `AI_ENABLED=true` and `ANTHROPIC_API_KEY` in `.env.local`, then `pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
 - Deploy to Vercel (import repo, copy env vars, add domain `pulse.semere.app` with CNAME `pulse` → `cname.vercel-dns.com`, check the cron is listed).
 - `GITHUB_PAT` expires 2026-11-29; regenerate with a longer expiry (also in Vercel).
 - Not built: emailing the report (Resend). Commits authored as `SemereT627` aren't counted.

@@ -8,7 +8,7 @@ export function DayBars({ days }: { days: WeekStats["byDay"] }) {
   const max = Math.max(1, ...days.map((d) => d.commits));
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div>
       <div className="grid h-36 grid-cols-7 items-end gap-2 sm:gap-4">
         {days.map((d, i) => (
           <div key={d.date} className="flex h-full flex-col items-center justify-end gap-1.5">

@@ -31,6 +31,8 @@ export type PullRequest = {
   closedAt: string | null;
   additions: number;
   deletions: number;
+  /** Logins who reviewed this PR (latest review each). Missing in snapshots fetched before v2. */
+  reviewers?: string[];
 };
 
 export type Review = {
@@ -40,6 +42,8 @@ export type Review = {
   prNumber: number;
   prTitle: string;
   prUrl: string;
+  /** Missing in snapshots fetched before v2, or when the author is a bot or deleted account. */
+  prAuthor?: string | null;
 };
 
 export type Issue = {
@@ -53,7 +57,10 @@ export type Issue = {
   closedAt: string | null;
 };
 
-export type UserSnapshot = { prs: PullRequest[]; reviews: Review[]; issues: Issue[] };
+/** Bump when UserSnapshot gains fields, so cached weeks refetch the user snapshot. */
+export const USER_SNAPSHOT_VERSION = 2;
+
+export type UserSnapshot = { v?: number; prs: PullRequest[]; reviews: Review[]; issues: Issue[] };
 
 export type PrStatus = "merged" | "closed" | "open" | "draft";
 

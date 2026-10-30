@@ -1,7 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import { regenerateWeekAction } from "@/app/week/actions";
+import { RefreshIcon } from "@/components/icons";
+import { buttonClass } from "@/components/ui";
+import { regenerateWeekAction } from "@/app/(app)/reports/actions";
 
 export function RegenerateButton({ weekStart }: { weekStart: string }) {
   const [pending, startTransition] = useTransition();
@@ -12,8 +14,9 @@ export function RegenerateButton({ weekStart }: { weekStart: string }) {
       disabled={pending}
       onClick={() => startTransition(() => regenerateWeekAction(weekStart))}
       title="Refetch this week from GitHub"
-      className="h-9 rounded-md border border-border px-3 font-mono text-xs text-muted transition-colors hover:bg-surface hover:text-foreground disabled:opacity-50"
+      className={buttonClass}
     >
+      <RefreshIcon className={`size-4 ${pending ? "animate-spin" : ""}`} />
       {pending ? "Refetching…" : "Refresh"}
     </button>
   );

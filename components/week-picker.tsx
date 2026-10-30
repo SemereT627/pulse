@@ -1,30 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { addDays } from "@/lib/report/week";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { addDays, weekQuery } from "@/lib/report/week";
 import { fmtRange } from "@/lib/format";
+import { navItemFor } from "./shell/nav";
 
-const hrefFor = (start: string, current: string) => (start === current ? "/" : `/week/${start}`);
-
-export function WeekPicker({ weeks, selected, current }: { weeks: string[]; selected: string; current: string }) {
+/** Sets `?week=` on the current section; hidden on sections that aren't about one week. */
+export function WeekPicker({ weeks, current }: { weeks: string[]; current: string }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const param = useSearchParams().get("week");
+  if (!navItemFor(pathname)?.weekScoped || pathname.startsWith("/repositories/manage")) return null;
+
+  // The server snaps odd dates to a week start; mirror that for the known weeks and trust the rest.
+  const selected = param && param < current ? (weeks.find((w) => w <= param && param < addDays(w, 7)) ?? param) : current;
+  const options = weeks.includes(selected) ? weeks : [selected, ...weeks];
+  const hrefFor = (start: string) => `${pathname}${weekQuery(start, current)}`;
   const prev = addDays(selected, -7);
   const next = addDays(selected, 7);
-  const options = weeks.includes(selected) ? weeks : [selected, ...weeks];
   const btn =
-    "flex size-9 items-center justify-center rounded-md border border-border font-mono text-sm text-muted transition-colors hover:bg-surface hover:text-foreground";
+    "flex size-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground";
 
   return (
-    <div className="flex items-center gap-2">
-      <Link href={hrefFor(prev, current)} className={btn} aria-label="Previous week">
-        ‹
+    <div className="flex items-center rounded-lg border border-border bg-surface/60">
+      <Link href={hrefFor(prev)} className={btn} aria-label="Previous week">
+        <ChevronLeftIcon />
       </Link>
       <select
         value={selected}
-        onChange={(e) => router.push(hrefFor(e.target.value, current))}
+        onChange={(e) => router.push(hrefFor(e.target.value))}
         aria-label="Week"
-        className="h-9 rounded-md border border-border bg-background px-2 font-mono text-xs"
+        className="h-9 max-w-36 cursor-pointer appearance-none bg-transparent px-1 text-center font-mono text-xs outline-none sm:max-w-none"
       >
         {options.map((w) => (
           <option key={w} value={w}>
@@ -33,11 +41,13 @@ export function WeekPicker({ weeks, selected, current }: { weeks: string[]; sele
         ))}
       </select>
       {selected < current ? (
-        <Link href={hrefFor(next, current)} className={btn} aria-label="Next week">
-          ›
+        <Link href={hrefFor(next)} className={btn} aria-label="Next week">
+          <ChevronRightIcon />
         </Link>
       ) : (
-        <span className={`${btn} pointer-events-none opacity-30`}>›</span>
+        <span className={`${btn} pointer-events-none opacity-30`} aria-hidden="true">
+          <ChevronRightIcon />
+        </span>
       )}
     </div>
   );

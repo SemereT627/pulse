@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { rateLimit, settings, snapshots, sources, type Source } from "@/db/schema";
 import { branchesFor, fetchRepoSnapshots, fetchUserSnapshot, fetchViewer } from "@/lib/github/activity";
 import { aggregate } from "./aggregate";
-import type { RepoSnapshot, UserSnapshot, WeekStats } from "./types";
+import { USER_SNAPSHOT_VERSION, type RepoSnapshot, type UserSnapshot, type WeekStats } from "./types";
 import type { WeekWindow } from "./week";
 
 // A week still in progress (or fetched before it ended) is refetched once its snapshot is this old.
@@ -67,7 +67,8 @@ export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cut
     const snap = byKey.get(`repo:${s.id}`);
     return isStale(snap, week, now) || !sameBranches((snap!.data as RepoSnapshot).branches, branchesFor(s));
   });
-  const userStale = isStale(byKey.get("user"), week, now);
+  const userSnap = byKey.get("user");
+  const userStale = isStale(userSnap, week, now) || (userSnap!.data as UserSnapshot).v !== USER_SNAPSHOT_VERSION;
 
   if (staleSources.length > 0 || userStale) {
     const viewer = await fetchViewer();

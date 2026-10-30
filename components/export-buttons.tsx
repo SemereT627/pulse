@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { CopyIcon, DownloadIcon } from "@/components/icons";
+import { buttonClass } from "@/components/ui";
 
 export function ExportButtons({ markdown, filename }: { markdown: string; filename: string }) {
   const [copied, setCopied] = useState(false);
@@ -18,16 +20,15 @@ export function ExportButtons({ markdown, filename }: { markdown: string; filena
     URL.revokeObjectURL(url);
   };
 
-  const btn =
-    "h-9 rounded-md border border-border px-3 font-mono text-xs text-muted transition-colors hover:bg-surface hover:text-foreground";
-
   return (
     <div className="flex items-center gap-2">
-      <button type="button" onClick={copy} className={btn}>
-        {copied ? "Copied ✓" : "Copy .md"}
+      <button type="button" onClick={copy} className={buttonClass}>
+        <CopyIcon className="size-4" />
+        {copied ? "Copied" : "Copy Markdown"}
       </button>
-      <button type="button" onClick={download} className={btn} aria-label="Download Markdown">
-        ↓ .md
+      <button type="button" onClick={download} className={buttonClass} aria-label="Download Markdown">
+        <DownloadIcon className="size-4" />
+        .md
       </button>
     </div>
   );
