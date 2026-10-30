@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Pulse brand: ink ground, lime accent. Dark-first; light only when the OS asks for it. */
+/* Pulse brand: ink ground, lime accent. Dark-first; see data-theme below for the Settings override. */
 :root {
   --background: #0e100f;
   --surface: #151816;
@@ -14,8 +14,9 @@
   color-scheme: dark;
 }
 
+/* Light: when the OS asks and the user hasn't picked dark in Settings, or when they picked light. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --background: #f6f7f3;
     --surface: #ffffff;
     --surface-2: #eef0ea;
@@ -27,6 +28,19 @@
     --danger: #dc2626;
     color-scheme: light;
   }
+}
+
+:root[data-theme="light"] {
+  --background: #f6f7f3;
+  --surface: #ffffff;
+  --surface-2: #eef0ea;
+  --border: #d9ddd5;
+  --foreground: #0e100f;
+  --muted: #545c53;
+  --accent: #3b7d10;
+  --accent-foreground: #ffffff;
+  --danger: #dc2626;
+  color-scheme: light;
 }
 
 @theme inline {

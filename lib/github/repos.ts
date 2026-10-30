@@ -1,7 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { sources } from "@/db/schema";
+import { settings, sources } from "@/db/schema";
 import { gh, RATE_LIMIT_FIELDS } from "./client";
 
 const REPOS_QUERY = `
@@ -62,7 +62,7 @@ export async function listAccessibleRepos(): Promise<RepoNode[]> {
 
 /** Upsert every accessible repo; keeps the user's `included` / `extraBranches` choices. */
 export async function syncSources(): Promise<number> {
-  const repos = await listAccessibleRepos();
+  const [repos, [config]] = await Promise.all([listAccessibleRepos(), db.select().from(settings).limit(1)]);
   if (repos.length === 0) return 0;
 
   await db
@@ -76,6 +76,8 @@ export async function syncSources(): Promise<number> {
         isArchived: r.isArchived,
         defaultBranch: r.defaultBranchRef?.name ?? null,
         pushedAt: r.pushedAt ? new Date(r.pushedAt) : null,
+        // Only applies to newly seen repos; the conflict update below leaves existing choices alone.
+        ...(config && { extraBranches: config.defaultExtraBranches }),
       })),
     )
     .onConflictDoUpdate({

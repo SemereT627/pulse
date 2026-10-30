@@ -20,7 +20,27 @@ export const settings = pgTable("settings", {
   aiEnabled: boolean("ai_enabled").notNull().default(true),
   cronEnabled: boolean("cron_enabled").notNull().default(true),
   emailTo: text("email_to"),
+
+  // AI summary. API keys stay in env vars; these only pick and shape the call.
+  aiProvider: text("ai_provider", { enum: ["anthropic", "openai", "gemini", "github"] }).notNull().default("anthropic"),
+  aiModel: text("ai_model"), // null = the provider's default
+  aiTone: text("ai_tone", { enum: ["professional", "conversational", "concise"] }).notNull().default("professional"),
+  aiLength: text("ai_length", { enum: ["short", "medium", "long"] }).notNull().default("medium"),
+  aiInstructions: text("ai_instructions"),
+  aiUsePrevious: boolean("ai_use_previous").notNull().default(true),
+
+  // What counts.
+  excludePromotionPrs: boolean("exclude_promotion_prs").notNull().default(true),
+  extraAuthorLogins: text("extra_author_logins").array().notNull().default([]),
+  defaultExtraBranches: text("default_extra_branches").array().notNull().default(["dev"]),
+
+  // Report and schedule.
+  reportAuthor: text("report_author"), // null = REPORT_NAME env
+  mdSections: text("md_sections").array().notNull().default(["summary", "commits", "reviews", "releases"]),
+  reportDay: smallint("report_day").notNull().default(5), // 0 = Sun … 6 = Sat, in `timezone`
 });
+
+export type Settings = typeof settings.$inferSelect;
 
 export const sources = pgTable("sources", {
   id: serial("id").primaryKey(),

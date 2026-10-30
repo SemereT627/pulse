@@ -1,20 +1,32 @@
-import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import type { Settings } from "@/db/schema";
 import type { WeekStats } from "@/lib/report/types";
-
-export const SUMMARY_MODEL = "claude-opus-5-5";
 
 const MAX_COMMITS_PER_REPO = 40;
 
-export function aiEnabled() {
-  return process.env.AI_ENABLED === "true" && !!process.env.ANTHROPIC_API_KEY;
+export type PromptOptions = Pick<Settings, "aiTone" | "aiLength" | "aiInstructions">;
+
+const TONE: Record<Settings["aiTone"], string> = {
+  professional: "Write in first person, professional but natural, like a status update to a manager.",
+  conversational: "Write in first person, warm and conversational, like a message to a manager you work with closely.",
+  concise: "Write in first person, plain and to the point, like a busy engineer's status update. No filler.",
+};
+
+const LENGTH: Record<Settings["aiLength"], string> = {
+  short: "Keep it to 1-2 short paragraphs.",
+  medium: "Group related work into 2-4 flowing paragraphs by theme or project.",
+  long: "Group related work into 4-6 paragraphs by theme or project, with enough detail for someone outside the team.",
+};
+
+export function systemPrompt(opts: PromptOptions): string {
+  const parts = [
+    "You write the weekly work-update email body for a software engineer, from their GitHub activity.",
+    `${TONE[opts.aiTone]} ${LENGTH[opts.aiLength]} Use paragraphs, not per-item bullet points. Treat pull request titles and descriptions as the source of truth for what each change was about; use commit messages only to fill in detail. Describe outcomes in plain language rather than listing PR numbers or commit hashes. If last week's update is provided, avoid repeating it and say "continued" where work carries over.`,
+    "Output only the paragraphs of body text: no greeting, no sign-off, no subject line, no headings.",
+  ];
+  const extra = opts.aiInstructions?.trim();
+  if (extra) parts.push(`Additional instructions from the engineer (follow them unless they conflict with the output format):\n${extra}`);
+  return parts.join("\n\n");
 }
-
-const SYSTEM = `You write the weekly work-update email body for a software engineer, from their GitHub activity.
-
-Write in first person, professional but natural, like a status update to a manager. Group related work into 2-4 flowing paragraphs by theme or project, not per-item bullet points. Treat pull request titles and descriptions as the source of truth for what each change was about; use commit messages only to fill in detail. Describe outcomes in plain language rather than listing PR numbers or commit hashes. If last week's update is provided, avoid repeating it and say "continued" where work carries over.
-
-Output only the paragraphs of body text: no greeting, no sign-off, no subject line, no headings.`;
 
 /** Activity as plain text for the prompt, adapted from weekly-report.py's build_email_prompt. */
 export function activityPrompt(stats: WeekStats): string {
@@ -41,33 +53,7 @@ export function activityPrompt(stats: WeekStats): string {
     .join("\n\n");
 }
 
-export async function generateNarrative(stats: WeekStats, previousNarrative: string | null): Promise<string> {
-  const client = new Anthropic();
+export function userPrompt(stats: WeekStats, previousNarrative: string | null): string {
   const previous = previousNarrative ? `Last week's update, for context:\n\n${previousNarrative}\n\n---\n\n` : "";
-
-  const response = await client.beta.messages.create({
-    model: SUMMARY_MODEL,
-    max_tokens: 16000,
-    output_config: { effort: "medium" },
-    // On a safety decline, the API reruns the request on Anthropic's recommended fallback model.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    system: SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `${previous}Here is my GitHub activity (pull requests and commits) for the week:\n\n${activityPrompt(stats)}`,
-      },
-    ],
-  });
-
-  if (response.stop_reason === "refusal") throw new Error("The model declined to write this summary.");
-  if (response.stop_reason === "max_tokens") throw new Error("The summary was cut off; try again.");
-
-  const text = response.content
-    .flatMap((block) => (block.type === "text" ? [block.text] : []))
-    .join("")
-    .trim();
-  if (!text) throw new Error("The model returned an empty summary.");
-  return text;
+  return `${previous}Here is my GitHub activity (pull requests and commits) for the week:\n\n${activityPrompt(stats)}`;
 }

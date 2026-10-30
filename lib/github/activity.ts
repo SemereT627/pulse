@@ -37,31 +37,50 @@ const toCommit = (n: HistoryConn["nodes"][number]): Commit => ({
   deletions: n.deletions,
 });
 
-function historyArgs(after?: string | null) {
-  return `first: ${PAGE}, since: $since, until: $until, author: { id: $me }${after ? `, after: ${JSON.stringify(after)}` : ""}`;
+function historyArgs(authorId: string, after?: string | null) {
+  return `first: ${PAGE}, since: $since, until: $until, author: { id: ${JSON.stringify(authorId)} }${after ? `, after: ${JSON.stringify(after)}` : ""}`;
 }
 
-function refAlias(alias: string, source: Source, branch: string, after?: string | null) {
+function refAlias(alias: string, source: Source, branch: string, authorId: string, after?: string | null) {
   return `${alias}: repository(owner: ${JSON.stringify(source.owner)}, name: ${JSON.stringify(source.name)}) {
     ref(qualifiedName: ${JSON.stringify(`refs/heads/${branch}`)}) {
-      target { ... on Commit { history(${historyArgs(after)}) { ${HISTORY_FIELDS} } } }
+      target { ... on Commit { history(${historyArgs(authorId, after)}) { ${HISTORY_FIELDS} } } }
     }
   }`;
 }
 
+/** GitHub node ids for logins; unknown logins are skipped. */
+export async function fetchUserIds(logins: string[]): Promise<string[]> {
+  if (logins.length === 0) return [];
+  const fields = logins.map((l, i) => `u${i}: user(login: ${JSON.stringify(l)}) { id }`).join("\n");
+  const data = await gh<Record<string, { id: string } | null>>(`query { ${fields} ${RATE_LIMIT_FIELDS} }`).catch(() => ({}));
+  return logins.map((_, i) => (data as Record<string, { id: string } | null>)[`u${i}`]?.id).filter((id): id is string => !!id);
+}
+
+/**
+ * Commits on each tracked branch by any of `authorIds` (the PAT owner first), plus the PAT owner's releases.
+ * `extraAuthors` is recorded in the snapshot so changing it refetches.
+ */
 export async function fetchRepoSnapshots(
   sources: Source[],
   week: WeekWindow,
-  viewerId: string,
+  authorIds: string[],
+  extraAuthors: string[] = [],
 ): Promise<Map<number, RepoSnapshot>> {
   const result = new Map<number, RepoSnapshot>();
-  const vars = { since: week.start.toISOString(), until: week.end.toISOString(), me: viewerId };
+  const viewerId = authorIds[0];
+  const vars = { since: week.start.toISOString(), until: week.end.toISOString() };
+  const QUERY_VARS = "$since: GitTimestamp!, $until: GitTimestamp!";
 
-  for (let i = 0; i < sources.length; i += REPOS_PER_QUERY) {
-    const chunk = sources.slice(i, i + REPOS_PER_QUERY);
+  // Each extra author multiplies the aliases per repo, so fewer repos fit in one query.
+  const perQuery = Math.max(1, Math.floor(REPOS_PER_QUERY / authorIds.length));
+  for (let i = 0; i < sources.length; i += perQuery) {
+    const chunk = sources.slice(i, i + perQuery);
     const fields: string[] = [];
     chunk.forEach((s, si) => {
-      branchesFor(s).forEach((b, bi) => fields.push(refAlias(`c${si}_${bi}`, s, b)));
+      branchesFor(s).forEach((b, bi) =>
+        authorIds.forEach((a, ai) => fields.push(refAlias(`c${si}_${bi}_${ai}`, s, b, a))),
+      );
       fields.push(`r${si}: repository(owner: ${JSON.stringify(s.owner)}, name: ${JSON.stringify(s.name)}) {
         releases(first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
           nodes { name tagName publishedAt url author { id } }
@@ -70,7 +89,7 @@ export async function fetchRepoSnapshots(
     });
 
     const data = await gh<Record<string, unknown>>(
-      `query ($since: GitTimestamp!, $until: GitTimestamp!, $me: ID!) { ${fields.join("\n")} ${RATE_LIMIT_FIELDS} }`,
+      `query (${QUERY_VARS}) { ${fields.join("\n")} ${RATE_LIMIT_FIELDS} }`,
       vars,
     );
 
@@ -78,15 +97,17 @@ export async function fetchRepoSnapshots(
       const branches = branchesFor(s);
       const commits: Commit[] = [];
       for (const [bi, b] of branches.entries()) {
-        let conn = (data[`c${si}_${bi}`] as { ref: RefResult } | null)?.ref?.target?.history;
-        while (conn) {
-          commits.push(...conn.nodes.map(toCommit));
-          if (!conn.pageInfo.hasNextPage) break;
-          const next = await gh<{ c: { ref: RefResult } }>(
-            `query ($since: GitTimestamp!, $until: GitTimestamp!, $me: ID!) { ${refAlias("c", s, b, conn.pageInfo.endCursor)} ${RATE_LIMIT_FIELDS} }`,
-            vars,
-          );
-          conn = next.c?.ref?.target?.history;
+        for (const [ai, a] of authorIds.entries()) {
+          let conn = (data[`c${si}_${bi}_${ai}`] as { ref: RefResult } | null)?.ref?.target?.history;
+          while (conn) {
+            commits.push(...conn.nodes.map(toCommit));
+            if (!conn.pageInfo.hasNextPage) break;
+            const next = await gh<{ c: { ref: RefResult } }>(
+              `query (${QUERY_VARS}) { ${refAlias("c", s, b, a, conn.pageInfo.endCursor)} ${RATE_LIMIT_FIELDS} }`,
+              vars,
+            );
+            conn = next.c?.ref?.target?.history;
+          }
         }
       }
 
@@ -96,7 +117,7 @@ export async function fetchRepoSnapshots(
         .filter((r) => r.author?.id === viewerId && r.publishedAt)
         .map(({ name, tagName, publishedAt, url }) => ({ name, tagName, publishedAt, url }));
 
-      result.set(s.id, { branches, commits, releases });
+      result.set(s.id, { branches, extraAuthors, commits, releases });
     }
   }
 
@@ -177,7 +198,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
     searchAll<PrNode>(
       `is:pr author:${viewer.login} updated:${range(week)}`,
       `... on PullRequest {
-        number title body url state isDraft createdAt mergedAt closedAt additions deletions
+        number title body url state isDraft createdAt mergedAt closedAt additions deletions headRefName baseRefName
         repository { nameWithOwner }
         latestReviews(first: 20) { nodes { author { __typename login } } }
       }`,

@@ -8,6 +8,13 @@
       "when": 1793380834865,
       "tag": "0000_windy_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793392528211,
+      "tag": "0001_many_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

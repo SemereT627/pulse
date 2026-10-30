@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { rateLimit, settings, snapshots, sources, type Source } from "@/db/schema";
-import { branchesFor, fetchRepoSnapshots, fetchUserSnapshot, fetchViewer } from "@/lib/github/activity";
+import { branchesFor, fetchRepoSnapshots, fetchUserIds, fetchUserSnapshot, fetchViewer } from "@/lib/github/activity";
 import { aggregate } from "./aggregate";
 import { USER_SNAPSHOT_VERSION, type RepoSnapshot, type UserSnapshot, type WeekStats } from "./types";
 import type { WeekWindow } from "./week";
@@ -52,7 +52,8 @@ export type LoadedWeek = { stats: WeekStats; sources: Source[]; fetchedAt: Date 
  * `cutoff` limits aggregation to activity before that instant (snapshots still cover the whole week).
  */
 export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cutoff?: Date } = {}): Promise<LoadedWeek> {
-  const included = opts.sources ?? (await includedSources());
+  const [included, settings] = await Promise.all([opts.sources ?? includedSources(), getSettings()]);
+  const extraAuthors = [...settings.extraAuthorLogins].sort();
   const keys = ["user", ...included.map((s) => `repo:${s.id}`)];
   const cached = keys.length
     ? await db
@@ -65,15 +66,23 @@ export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cut
 
   const staleSources = included.filter((s) => {
     const snap = byKey.get(`repo:${s.id}`);
-    return isStale(snap, week, now) || !sameBranches((snap!.data as RepoSnapshot).branches, branchesFor(s));
+    const data = snap?.data as RepoSnapshot | undefined;
+    return (
+      isStale(snap, week, now) ||
+      !sameBranches(data!.branches, branchesFor(s)) ||
+      !sameBranches(data!.extraAuthors ?? [], extraAuthors)
+    );
   });
-  const userSnap = byKey.get("user");
-  const userStale = isStale(userSnap, week, now) || (userSnap!.data as UserSnapshot).v !== USER_SNAPSHOT_VERSION;
+  const cachedUser = byKey.get("user");
+  const userStale = isStale(cachedUser, week, now) || (cachedUser!.data as UserSnapshot).v !== USER_SNAPSHOT_VERSION;
 
   if (staleSources.length > 0 || userStale) {
-    const viewer = await fetchViewer();
+    const [viewer, extraIds] = await Promise.all([fetchViewer(), staleSources.length ? fetchUserIds(extraAuthors) : []]);
+    const authorIds = [viewer.id, ...extraIds.filter((id) => id !== viewer.id)];
     const [repoSnaps, userSnap] = await Promise.all([
-      staleSources.length ? fetchRepoSnapshots(staleSources, week, viewer.id) : new Map<number, RepoSnapshot>(),
+      staleSources.length
+        ? fetchRepoSnapshots(staleSources, week, authorIds, extraAuthors)
+        : new Map<number, RepoSnapshot>(),
       userStale ? fetchUserSnapshot(week, viewer) : null,
     ]);
 
@@ -91,6 +100,7 @@ export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cut
     included.map((s) => ({
       repo: `${s.owner}/${s.name}`,
       snapshot: (byKey.get(`repo:${s.id}`)?.data as RepoSnapshot) ?? { branches: [], commits: [], releases: [] },
+      promotion: settings.excludePromotionPrs ? { from: s.extraBranches, into: s.defaultBranch } : undefined,
     })),
     (byKey.get("user")?.data as UserSnapshot) ?? { prs: [], reviews: [], issues: [] },
     opts.cutoff && opts.cutoff < week.end ? { ...week, end: opts.cutoff } : week,

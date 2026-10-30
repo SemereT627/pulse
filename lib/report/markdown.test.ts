@@ -60,4 +60,16 @@ describe("toMarkdown", () => {
     const md = toMarkdown(aggregate([], { prs: [], reviews: [], issues: [] }, week), week);
     expect(md).toContain("_No activity this week._");
   });
+
+  it("leaves out sections that are switched off", () => {
+    const stats = aggregate(
+      [{ repo: "o/a", snapshot: { branches: ["main"], commits: [commit(1)], releases: [] } }],
+      { prs: [pr(1, {})], reviews: [], issues: [] },
+      week,
+    );
+    const md = toMarkdown(stats, week, { narrative: "Shipped things.", sections: ["reviews"] });
+    expect(md).not.toContain("Shipped things.");
+    expect(md).not.toContain("**Commits**");
+    expect(md).toContain("**Open**\n- [#1]");
+  });
 });

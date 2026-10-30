@@ -14,6 +14,8 @@ export type Release = { name: string | null; tagName: string; publishedAt: strin
 export type RepoSnapshot = {
   /** Branches fetched, so a change in the source's branch config invalidates the cache. */
   branches: string[];
+  /** Extra author logins whose commits were fetched (besides the PAT owner); same purpose. */
+  extraAuthors?: string[];
   commits: Commit[];
   releases: Release[];
 };
@@ -31,6 +33,9 @@ export type PullRequest = {
   closedAt: string | null;
   additions: number;
   deletions: number;
+  /** Missing in snapshots fetched before v3. */
+  headRefName?: string;
+  baseRefName?: string;
   /** Logins who reviewed this PR (latest review each). Missing in snapshots fetched before v2. */
   reviewers?: string[];
 };
@@ -58,7 +63,7 @@ export type Issue = {
 };
 
 /** Bump when UserSnapshot gains fields, so cached weeks refetch the user snapshot. */
-export const USER_SNAPSHOT_VERSION = 2;
+export const USER_SNAPSHOT_VERSION = 3;
 
 export type UserSnapshot = { v?: number; prs: PullRequest[]; reviews: Review[]; issues: Issue[] };
 

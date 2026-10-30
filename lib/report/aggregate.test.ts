@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregate, deltas, median, prStatus } from "./aggregate";
+import { aggregate, deltas, isPromotionPr, median, prStatus } from "./aggregate";
 import type { Commit, PullRequest, RepoSnapshot, UserSnapshot } from "./types";
 import { weekFrom } from "./week";
 
@@ -135,5 +135,35 @@ describe("helpers", () => {
   it("deltas", () => {
     const base = aggregate([], emptyUser, week).totals;
     expect(deltas({ ...base, commits: 12 }, { ...base, commits: 8 }).commits).toEqual({ value: 12, previous: 8, change: 4 });
+  });
+});
+
+describe("isPromotionPr", () => {
+  const promotion = { from: ["dev"], into: "main" };
+
+  it("matches PRs from an extra branch into the default branch", () => {
+    expect(isPromotionPr(pr(1, { headRefName: "dev", baseRefName: "main" }), promotion)).toBe(true);
+    expect(isPromotionPr(pr(2, { headRefName: "feat/x", baseRefName: "dev" }), promotion)).toBe(false);
+    expect(isPromotionPr(pr(3, { headRefName: "dev", baseRefName: "release" }), promotion)).toBe(false);
+  });
+
+  it("never matches without config or ref data", () => {
+    expect(isPromotionPr(pr(1, { headRefName: "dev", baseRefName: "main" }), undefined)).toBe(false);
+    expect(isPromotionPr(pr(1, {}), promotion)).toBe(false);
+  });
+
+  it("drops promotion PRs from the week's stats", () => {
+    const user: UserSnapshot = {
+      prs: [
+        pr(1, { state: "MERGED", mergedAt: "2026-10-24T10:00:00Z", headRefName: "dev", baseRefName: "main" }),
+        pr(2, { state: "MERGED", mergedAt: "2026-10-24T10:00:00Z", headRefName: "feat/a", baseRefName: "dev" }),
+      ],
+      reviews: [],
+      issues: [],
+    };
+    const snapshot: RepoSnapshot = { branches: ["main", "dev"], commits: [], releases: [] };
+    const stats = aggregate([{ repo: "o/a", snapshot, promotion }], user, week);
+    expect(stats.totals.prsMerged).toBe(1);
+    expect(aggregate([{ repo: "o/a", snapshot }], user, week).totals.prsMerged).toBe(2);
   });
 });

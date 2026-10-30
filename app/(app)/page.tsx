@@ -6,7 +6,7 @@ import { RegenerateButton } from "@/components/regenerate-button";
 import { StatCards } from "@/components/stat-cards";
 import { WeekTrend } from "@/components/week-trend";
 import { EmptyState, LiveDot, PageHeader, Panel, PanelLink, Skeleton, primaryButtonClass } from "@/components/ui";
-import { aiEnabled } from "@/lib/ai/summary";
+import { aiReady } from "@/lib/ai/providers";
 import { deltas } from "@/lib/report/aggregate";
 import { getReport } from "@/lib/report/generate";
 import { includedSources, loadWeek } from "@/lib/report/load";
@@ -90,7 +90,7 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
         <SummaryPreview
           narrative={report?.narrative ?? null}
           href={`/reports${q}`}
-          aiOn={aiEnabled() && settings.aiEnabled}
+          aiOn={aiReady(settings)}
           hasActivity={stats.repos.length > 0}
         />
       </div>
@@ -155,7 +155,7 @@ function SummaryPreview({
               ? "Nothing to write up yet."
               : aiOn
                 ? "No summary for this week yet. Write one from your PRs and commits on the report page."
-                : "AI summaries are off. Turn them on in Settings, or export the stats as Markdown from the report."}
+                : "AI summaries aren't set up. Pick a provider in Settings, or export the stats as Markdown from the report."}
           </p>
           {hasActivity && (
             <Link href={href} className={primaryButtonClass}>

@@ -25,7 +25,10 @@ const PR_GROUPS: { status: PrStatus; label: string }[] = [
   { status: "closed", label: "Closed without merging" },
 ];
 
-function repoSection(r: RepoActivity): string[] {
+export const MD_SECTIONS = ["summary", "commits", "reviews", "releases"] as const;
+export type MdSection = (typeof MD_SECTIONS)[number];
+
+function repoSection(r: RepoActivity, sections: readonly string[]): string[] {
   const lines = [`## ${r.repo}`, ""];
 
   for (const { status, label } of PR_GROUPS) {
@@ -39,20 +42,20 @@ function repoSection(r: RepoActivity): string[] {
     lines.push("");
   }
 
-  if (r.commits.length > 0) {
+  if (sections.includes("commits") && r.commits.length > 0) {
     lines.push(`**Commits** (${r.commits.length})`);
     for (const c of r.commits.slice(0, MAX_COMMITS_PER_REPO)) lines.push(`- \`${c.oid.slice(0, 7)}\` ${c.message}`);
     if (r.commits.length > MAX_COMMITS_PER_REPO) lines.push(`- …and ${r.commits.length - MAX_COMMITS_PER_REPO} more`);
     lines.push("");
   }
 
-  if (r.reviews.length > 0) {
+  if (sections.includes("reviews") && r.reviews.length > 0) {
     lines.push("**Reviewed**");
     for (const rv of r.reviews) lines.push(`- [#${rv.prNumber}](${rv.prUrl}) ${rv.prTitle}`);
     lines.push("");
   }
 
-  if (r.releases.length > 0) {
+  if (sections.includes("releases") && r.releases.length > 0) {
     lines.push("**Released**");
     for (const rel of r.releases) lines.push(`- [${rel.tagName}](${rel.url})${rel.name && rel.name !== rel.tagName ? ` ${rel.name}` : ""}`);
     lines.push("");
@@ -61,8 +64,11 @@ function repoSection(r: RepoActivity): string[] {
   return lines;
 }
 
-/** Markdown for a week, ready to paste into Slack, email or Notion. */
-export function toMarkdown(stats: WeekStats, week: WeekWindow, opts: { author?: string; narrative?: string | null } = {}) {
+type MarkdownOptions = { author?: string | null; narrative?: string | null; sections?: readonly string[] };
+
+/** Markdown for a week, ready to paste into Slack, email or Notion. PRs and the headline are always included. */
+export function toMarkdown(stats: WeekStats, week: WeekWindow, opts: MarkdownOptions = {}) {
+  const sections = opts.sections ?? MD_SECTIONS;
   const t = stats.totals;
   const headline = [
     plural(t.commits, "commit"),
@@ -74,10 +80,10 @@ export function toMarkdown(stats: WeekStats, week: WeekWindow, opts: { author?: 
   ].filter(Boolean);
 
   const lines = [`# Weekly update${opts.author ? ` — ${opts.author}` : ""} — ${fmtRangeWithYear(week)}`, ""];
-  if (opts.narrative) lines.push(opts.narrative.trim(), "");
+  if (opts.narrative && sections.includes("summary")) lines.push(opts.narrative.trim(), "");
   lines.push(`**${headline.join(" · ")}**`, "");
   if (stats.repos.length === 0) lines.push("_No activity this week._", "");
-  for (const r of stats.repos) lines.push(...repoSection(r));
+  for (const r of stats.repos) lines.push(...repoSection(r, sections));
 
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }

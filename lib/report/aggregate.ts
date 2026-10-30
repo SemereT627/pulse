@@ -45,12 +45,21 @@ function prTouchedWeek(pr: PullRequest, week: WeekWindow) {
 
 const issueClosedByMe = (i: Issue, week: WeekWindow) => (i.authoredByMe || i.assignedToMe) && inWindow(i.closedAt, week);
 
+/** Branch-promotion PR config for a repo: PRs from a long-lived branch (`dev`) into the default branch. */
+export type Promotion = { from: string[]; into: string | null };
+
+/** A "Dev → main" style PR: it moves already-counted work between branches rather than adding any. */
+export function isPromotionPr(pr: PullRequest, promotion: Promotion | undefined) {
+  return !!promotion?.into && !!pr.headRefName && pr.baseRefName === promotion.into && promotion.from.includes(pr.headRefName);
+}
+
 export function aggregate(
-  repoSnapshots: { repo: string; snapshot: RepoSnapshot }[],
+  repoSnapshots: { repo: string; snapshot: RepoSnapshot; promotion?: Promotion }[],
   user: UserSnapshot,
   week: WeekWindow,
 ): WeekStats {
   const included = new Set(repoSnapshots.map((r) => r.repo));
+  const promotions = new Map(repoSnapshots.map((r) => [r.repo, r.promotion]));
   const byRepo = new Map<string, RepoActivity>();
   const repoEntry = (repo: string) => {
     let entry = byRepo.get(repo);
@@ -77,7 +86,9 @@ export function aggregate(
     entry.deletions = commits.reduce((n, c) => n + c.deletions, 0);
   }
 
-  const prs = user.prs.filter((pr) => included.has(pr.repo) && prTouchedWeek(pr, week));
+  const prs = user.prs.filter(
+    (pr) => included.has(pr.repo) && prTouchedWeek(pr, week) && !isPromotionPr(pr, promotions.get(pr.repo)),
+  );
   for (const pr of prs) {
     repoEntry(pr.repo).prs.push({
       ...pr,

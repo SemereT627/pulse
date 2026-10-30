@@ -7,8 +7,8 @@ import { reports } from "@/db/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { SummaryCard } from "@/components/summary-card";
 import { EmptyState, LiveDot, PageHeader, Panel, Skeleton } from "@/components/ui";
-import { aiEnabled } from "@/lib/ai/summary";
-import { getReport } from "@/lib/report/generate";
+import { aiReady } from "@/lib/ai/providers";
+import { getReport, markdownOptions } from "@/lib/report/generate";
 import { loadWeek } from "@/lib/report/load";
 import { toMarkdown } from "@/lib/report/markdown";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
@@ -29,8 +29,8 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
   const { settings, current, week, isCurrent } = await selectedWeek(searchParams);
   const [{ stats, sources }, report] = await Promise.all([loadWeek(week), getReport(week.startDate)]);
   const narrative = report?.narrative ?? null;
-  const markdown = toMarkdown(stats, week, { author: process.env.REPORT_NAME, narrative });
-  const aiOn = aiEnabled() && settings.aiEnabled;
+  const markdown = toMarkdown(stats, week, markdownOptions(settings, narrative));
+  const aiOn = aiReady(settings);
   const savedAt = report
     ? new Intl.DateTimeFormat("en-US", {
         timeZone: settings.timezone,
@@ -81,9 +81,9 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
             ) : (
               <Panel>
                 <p className="text-sm text-muted">
-                  AI summaries are off.{" "}
-                  <Link href="/settings" className="text-foreground underline underline-offset-4 hover:text-accent">
-                    Turn them on in Settings
+                  {settings.aiEnabled ? "The AI provider has no API key yet." : "AI summaries are off."}{" "}
+                  <Link href="/settings#ai" className="text-foreground underline underline-offset-4 hover:text-accent">
+                    Set them up in Settings
                   </Link>{" "}
                   to get a first-person update for your manager; the Markdown below has the stats either way.
                 </p>
