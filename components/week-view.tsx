@@ -14,7 +14,8 @@ import { WeekPicker } from "./week-picker";
 /** `weekStart` omitted = the week in progress. */
 export async function WeekView({ weekStart }: { weekStart?: string }) {
   const [settings, sources] = await Promise.all([getSettings(), includedSources()]);
-  const current = weekContaining(new Date(), settings.timezone, settings.weekStartDay);
+  const now = new Date();
+  const current = weekContaining(now, settings.timezone, settings.weekStartDay);
   const week = weekStart ? weekFrom(weekStart, settings.timezone) : current;
   const isCurrent = week.startDate === current.startDate;
 
@@ -35,7 +36,7 @@ export async function WeekView({ weekStart }: { weekStart?: string }) {
 
   // A week in progress is compared with last week up to the same point, not the whole of it.
   const prev = previousWeek(week);
-  const cutoff = isCurrent ? new Date(prev.start.getTime() + (Date.now() - week.start.getTime())) : undefined;
+  const cutoff = isCurrent ? new Date(prev.start.getTime() + (now.getTime() - week.start.getTime())) : undefined;
   const [thisWeek, lastWeek, rate] = await Promise.all([
     loadWeek(week, { sources }),
     loadWeek(prev, { sources, cutoff }),
