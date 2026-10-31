@@ -22,7 +22,9 @@ export const settings = pgTable("settings", {
   emailTo: text("email_to"),
 
   // AI summary. API keys stay in env vars; these only pick and shape the call.
-  aiProvider: text("ai_provider", { enum: ["anthropic", "openai", "gemini", "github"] }).notNull().default("anthropic"),
+  aiProvider: text("ai_provider", {
+    enum: ["anthropic", "openai", "gemini", "github", "groq", "openrouter", "mistral", "cerebras", "deepseek"],
+  }).notNull().default("anthropic"),
   aiModel: text("ai_model"), // null = the provider's default
   aiTone: text("ai_tone", { enum: ["professional", "conversational", "concise"] }).notNull().default("professional"),
   aiLength: text("ai_length", { enum: ["short", "medium", "long"] }).notNull().default("medium"),

@@ -50,6 +50,49 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
     hint: "GITHUB_MODELS_TOKEN (fine-grained, Models: read), or GITHUB_PAT if it has access",
   },
+  // Default models below were current when added; the Test button in Settings lists what each key can use.
+  groq: {
+    label: "Groq",
+    env: ["GROQ_API_KEY"],
+    defaultModel: "openai/gpt-oss-120b",
+    baseUrl: "https://api.groq.com/openai/v1",
+    modelsUrl: "/models",
+    hint: "GROQ_API_KEY from console.groq.com (free tier)",
+  },
+  openrouter: {
+    label: "OpenRouter",
+    env: ["OPENROUTER_API_KEY"],
+    defaultModel: "openrouter/auto",
+    baseUrl: "https://openrouter.ai/api/v1",
+    modelsUrl: "/models",
+    // Optional attribution headers OpenRouter asks apps to send.
+    headers: { "HTTP-Referer": "https://pulse.semere.app", "X-Title": "Pulse" },
+    hint: "OPENROUTER_API_KEY from openrouter.ai/keys (free models end in :free)",
+  },
+  mistral: {
+    label: "Mistral",
+    env: ["MISTRAL_API_KEY"],
+    defaultModel: "mistral-medium-latest",
+    baseUrl: "https://api.mistral.ai/v1",
+    modelsUrl: "/models",
+    hint: "MISTRAL_API_KEY from console.mistral.ai (free Experiment tier)",
+  },
+  cerebras: {
+    label: "Cerebras",
+    env: ["CEREBRAS_API_KEY"],
+    defaultModel: "gpt-oss-120b",
+    baseUrl: "https://api.cerebras.ai/v1",
+    modelsUrl: "/models",
+    hint: "CEREBRAS_API_KEY from cloud.cerebras.ai (free tier)",
+  },
+  deepseek: {
+    label: "DeepSeek",
+    env: ["DEEPSEEK_API_KEY"],
+    defaultModel: "deepseek-chat",
+    baseUrl: "https://api.deepseek.com/v1",
+    modelsUrl: "/models",
+    hint: "DEEPSEEK_API_KEY from platform.deepseek.com (paid, low cost)",
+  },
 };
 
 export const isProviderId = (v: unknown): v is ProviderId => typeof v === "string" && v in PROVIDERS;
