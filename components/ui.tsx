@@ -78,3 +78,15 @@ export function Skeleton({ className }: { className: string }) {
 export function LiveDot() {
   return <span className="size-1.5 animate-pulse rounded-full bg-accent" />;
 }
+
+/** Shown when GitHub couldn't be reached and a page falls back to saved data. */
+export function OfflineNotice({ fetchedAt, now }: { fetchedAt: Date | null; now: Date }) {
+  const mins = fetchedAt ? Math.round((now.getTime() - fetchedAt.getTime()) / 60_000) : null;
+  const age =
+    mins === null ? "" : mins < 60 ? ` from ${mins}m ago` : mins < 48 * 60 ? ` from ${Math.round(mins / 60)}h ago` : ` from ${Math.round(mins / 1440)}d ago`;
+  return (
+    <p role="status" className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm">
+      Couldn&apos;t reach GitHub, so this shows saved data{age}. It may be incomplete; refresh once you&apos;re back online.
+    </p>
+  );
+}

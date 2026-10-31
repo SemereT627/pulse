@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { RegenerateButton } from "@/components/regenerate-button";
-import { EmptyState, PageHeader, Panel, Skeleton } from "@/components/ui";
+import { EmptyState, OfflineNotice, PageHeader, Panel, Skeleton } from "@/components/ui";
 import { collaborators, hasCollaboratorData, type CollabLink, type Collaborator } from "@/lib/report/collaborators";
 import { loadWeek } from "@/lib/report/load";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
@@ -19,8 +19,8 @@ export default function ContributorsPage({ searchParams }: PageProps<"/contribut
 }
 
 async function People({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { week, isCurrent } = await selectedWeek(searchParams);
-  const { stats } = await loadWeek(week);
+  const { week, isCurrent, now } = await selectedWeek(searchParams);
+  const { stats, fetchedAt, fetchError } = await loadWeek(week);
   const people = collaborators(stats.repos);
   const complete = hasCollaboratorData(stats.repos);
   const reviewedMine = people.filter((p) => p.reviewedMine.length > 0).length;
@@ -35,7 +35,9 @@ async function People({ searchParams }: { searchParams: WeekSearchParams }) {
         actions={!complete && <RegenerateButton weekStart={week.startDate} />}
       />
 
-      {!complete && (
+      {fetchError && <OfflineNotice fetchedAt={fetchedAt} now={now} />}
+
+      {!complete && !fetchError && (
         <p className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
           This week was fetched before Pulse tracked reviewers, so some people may be missing. Refresh to refetch it.
         </p>

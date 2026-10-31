@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { RepoList } from "@/components/repo-list";
-import { EmptyState, PageHeader, Skeleton, primaryButtonClass } from "@/components/ui";
+import { EmptyState, OfflineNotice, PageHeader, Skeleton, primaryButtonClass } from "@/components/ui";
 import { loadWeek } from "@/lib/report/load";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
 import { fmtNumber, fmtRange } from "@/lib/format";
@@ -22,8 +22,8 @@ export default function RepositoriesPage({ searchParams }: PageProps<"/repositor
 }
 
 async function Activity({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { week, isCurrent } = await selectedWeek(searchParams);
-  const { stats, sources } = await loadWeek(week);
+  const { week, isCurrent, now } = await selectedWeek(searchParams);
+  const { stats, sources, fetchedAt, fetchError } = await loadWeek(week);
 
   if (sources.length === 0) {
     return (
@@ -49,6 +49,8 @@ async function Activity({ searchParams }: { searchParams: WeekSearchParams }) {
         title={fmtRange(week.startDate, week.endDate)}
         description={`${stats.repos.length} of ${sources.length} tracked repos active · ${fmtNumber(totals.commits)} commits · ${fmtNumber(totals.prsOpened + totals.prsMerged)} PR events · ${fmtNumber(totals.reviews)} reviews`}
       />
+
+      {fetchError && <OfflineNotice fetchedAt={fetchedAt} now={now} />}
 
       {stats.repos.length === 0 ? (
         <EmptyState title="Quiet week">No commits, PRs or reviews in tracked repos{isCurrent ? " yet." : "."}</EmptyState>

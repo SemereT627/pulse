@@ -18,7 +18,13 @@ export async function getReport(weekStart: string) {
  * one row per week, replaced on rerun. Without `withNarrative`, an existing narrative is kept.
  */
 export async function generateReport(week: WeekWindow, trigger: "cron" | "manual", opts: { withNarrative?: boolean } = {}) {
-  const [{ stats }, existing, settings] = await Promise.all([loadWeek(week), getReport(week.startDate), getSettings()]);
+  const [{ stats, fetchError }, existing, settings] = await Promise.all([
+    loadWeek(week),
+    getReport(week.startDate),
+    getSettings(),
+  ]);
+  // A saved report should reflect GitHub, not whatever happened to be cached when the network dropped.
+  if (fetchError) throw new Error(`Couldn't reach GitHub, so the report wasn't saved: ${fetchError}`);
 
   let narrative = existing?.narrative ?? null;
   let narrativeModel = existing?.narrativeModel ?? null;

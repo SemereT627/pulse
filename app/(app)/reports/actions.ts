@@ -3,14 +3,14 @@
 import { refresh } from "next/cache";
 import { aiReady, PROVIDERS } from "@/lib/ai/providers";
 import { generateReport } from "@/lib/report/generate";
-import { clearWeek, getSettings } from "@/lib/report/load";
+import { expireWeek, getSettings } from "@/lib/report/load";
 import { isValidDate, weekFrom } from "@/lib/report/week";
 import { requireUser } from "@/lib/session";
 
 export async function regenerateWeekAction(weekStart: string) {
   await requireUser();
   if (!isValidDate(weekStart)) throw new Error("Invalid week");
-  await clearWeek(weekStart);
+  await expireWeek(weekStart);
   refresh();
 }
 

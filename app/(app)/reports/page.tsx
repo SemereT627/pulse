@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { SummaryCard } from "@/components/summary-card";
-import { EmptyState, LiveDot, PageHeader, Panel, Skeleton } from "@/components/ui";
+import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, Skeleton } from "@/components/ui";
 import { aiReady } from "@/lib/ai/providers";
 import { getReport, markdownOptions } from "@/lib/report/generate";
 import { loadWeek } from "@/lib/report/load";
@@ -26,8 +26,8 @@ export default function ReportsPage({ searchParams }: PageProps<"/reports">) {
 }
 
 async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { settings, current, week, isCurrent } = await selectedWeek(searchParams);
-  const [{ stats, sources }, report] = await Promise.all([loadWeek(week), getReport(week.startDate)]);
+  const { settings, now, current, week, isCurrent } = await selectedWeek(searchParams);
+  const [{ stats, sources, fetchedAt, fetchError }, report] = await Promise.all([loadWeek(week), getReport(week.startDate)]);
   const narrative = report?.narrative ?? null;
   const markdown = toMarkdown(stats, week, markdownOptions(settings, narrative));
   const aiOn = aiReady(settings);
@@ -66,6 +66,8 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
             <ExportButtons markdown={markdown} filename={`pulse-${week.startDate}_to_${week.endDate}.md`} />
           }
         />
+
+        {fetchError && <OfflineNotice fetchedAt={fetchedAt} now={now} />}
 
         {sources.length === 0 ? (
           <EmptyState title="No repos tracked yet">Choose repositories first, then come back for the report.</EmptyState>

@@ -5,7 +5,7 @@ import { SparkIcon } from "@/components/icons";
 import { RegenerateButton } from "@/components/regenerate-button";
 import { StatCards } from "@/components/stat-cards";
 import { WeekTrend } from "@/components/week-trend";
-import { EmptyState, LiveDot, PageHeader, Panel, PanelLink, Skeleton, primaryButtonClass } from "@/components/ui";
+import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, PanelLink, Skeleton, primaryButtonClass } from "@/components/ui";
 import { aiReady } from "@/lib/ai/providers";
 import { deltas } from "@/lib/report/aggregate";
 import { getReport } from "@/lib/report/generate";
@@ -76,6 +76,8 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
         description={thisWeek.fetchedAt ? `Synced from GitHub ${fmtAgo(thisWeek.fetchedAt, now.getTime())}` : undefined}
         actions={<RegenerateButton weekStart={week.startDate} />}
       />
+
+      {(thisWeek.fetchError || lastWeek.fetchError) && <OfflineNotice fetchedAt={thisWeek.fetchedAt} now={now} />}
 
       <StatCards
         deltas={deltas(stats.totals, lastWeek.stats.totals)}

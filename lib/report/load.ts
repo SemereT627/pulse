@@ -45,7 +45,13 @@ async function saveSnapshots(rows: { key: string; weekStart: string; data: unkno
     });
 }
 
-export type LoadedWeek = { stats: WeekStats; sources: Source[]; fetchedAt: Date | null };
+export type LoadedWeek = {
+  stats: WeekStats;
+  sources: Source[];
+  fetchedAt: Date | null;
+  /** Set when GitHub couldn't be reached and the stats come from older (or missing) snapshots. */
+  fetchError: string | null;
+};
 
 /**
  * Stats for one week, from cached snapshots where fresh, fetching from GitHub otherwise.
@@ -76,7 +82,19 @@ export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cut
   const cachedUser = byKey.get("user");
   const userStale = isStale(cachedUser, week, now) || (cachedUser!.data as UserSnapshot).v !== USER_SNAPSHOT_VERSION;
 
+  let fetchError: string | null = null;
   if (staleSources.length > 0 || userStale) {
+    try {
+      await refetch();
+    } catch (e) {
+      // Offline or GitHub down: fall back to what's cached rather than failing the page. Nothing cached = nothing to show.
+      if (byKey.size === 0) throw e;
+      fetchError = e instanceof Error ? e.message : "GitHub request failed";
+      console.error(`loadWeek ${week.startDate}: using cached snapshots`, e);
+    }
+  }
+
+  async function refetch() {
     const [viewer, extraIds] = await Promise.all([fetchViewer(), staleSources.length ? fetchUserIds(extraAuthors) : []]);
     const authorIds = [viewer.id, ...extraIds.filter((id) => id !== viewer.id)];
     const [repoSnaps, userSnap] = await Promise.all([
@@ -106,11 +124,15 @@ export async function loadWeek(week: WeekWindow, opts: { sources?: Source[]; cut
     opts.cutoff && opts.cutoff < week.end ? { ...week, end: opts.cutoff } : week,
   );
 
-  const times = [...byKey.values()].map((s) => s.fetchedAt.getTime());
-  return { stats, sources: included, fetchedAt: times.length ? new Date(Math.min(...times)) : null };
+  // Expired snapshots carry fetchedAt = epoch; they say nothing about when the data is from.
+  const times = [...byKey.values()].map((s) => s.fetchedAt.getTime()).filter((t) => t > 0);
+  return { stats, sources: included, fetchedAt: times.length ? new Date(Math.min(...times)) : null, fetchError };
 }
 
-/** Drop cached snapshots for a week so the next load refetches everything. */
-export async function clearWeek(weekStart: string) {
-  await db.delete(snapshots).where(eq(snapshots.weekStart, weekStart));
+/**
+ * Make a week's snapshots stale so the next load refetches everything. They're kept (not deleted)
+ * so the week still shows if GitHub can't be reached.
+ */
+export async function expireWeek(weekStart: string) {
+  await db.update(snapshots).set({ fetchedAt: new Date(0) }).where(eq(snapshots.weekStart, weekStart));
 }
