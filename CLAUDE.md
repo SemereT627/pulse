@@ -2,7 +2,7 @@
 
 # Pulse
 
-Personal weekly GitHub report for Semere (GitHub login `semere-wazza`), deployed on Vercel at pulse.semere.app. It reports only on Semere's own activity (not team stats), and its main output is a first-person weekly update for their manager. It replaces the CLI script in `~/Documents/dev/work/omnifleet/weekly-report/weekly-report.py`.
+Personal weekly GitHub report for Semere (reports on GitHub login `semere-wazza`; the repo lives at `SemereT627/pulse`), deployed on Vercel at pulse.semere.app. It reports only on Semere's own activity (not team stats), and its main output is a first-person weekly update for their manager. It replaces the CLI script in `~/Documents/dev/work/omnifleet/weekly-report/weekly-report.py`.
 
 ## Decisions (agreed, don't relitigate)
 
@@ -38,7 +38,7 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 - Lint flags `Date.now()` during render; read `new Date()` once instead.
 - `.env.local` holds secrets and contains an unquoted URL with `&`, so don't `source` it in a shell; load it with dotenv.
 - `.smoke/` (gitignored, lint-ignored) holds local smoke scripts: `vitest run -c .smoke/vitest.config.mts` runs fetchers against real GitHub/Neon with `server-only` stubbed.
-- Pushing: SSH logs in as `SemereT627`, but this repo is under `semere-wazza`, so `origin` is HTTPS with a repo-local credential helper using `gh auth token --user semere-wazza`. Don't change it.
+- Repo moved 2026-10-31 from `semere-wazza/pulse` (deleted) to `SemereT627/pulse`; `origin` is SSH (`git@github.com:SemereT627/pulse.git`), which logs in as SemereT627. The data PAT still belongs to `semere-wazza`, so reports are unaffected.
 - Commit and push to `main` after a change is verified, with the Claude co-author line.
 
 ## Commands
@@ -51,7 +51,7 @@ Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-sec
 
 Next:
 - AI summary not yet run live. No Anthropic key available. On this machine `models.github.ai` is intercepted (returns plain "OK", malformed DNS), so GitHub Models can't be tested locally; try it on Vercel, or get a Gemini key (free tier). Smoke: `SMOKE_PROVIDER=gemini pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
-- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. The repo isn't connected to Vercel's Git integration (Vercel account is linked to `SemereT627`); `.github/workflows/deploy.yml` runs lint + test and `vercel deploy --prod` on every push to `main`, using repo secret `VERCEL_TOKEN`. Manual fallback: `vercel deploy --prod`. Pushing workflow files needs the `workflow` scope on the semere-wazza gh token.
+- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. Connect `SemereT627/pulse` in Vercel (project → Settings → Git) so pushes to `main` deploy; until then, `vercel deploy --prod`.
 - `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
 - Production needs its own GitHub OAuth app (callback `https://pulse.semere.app/api/auth/callback/github`); `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` aren't in Vercel yet, so production sign-in doesn't work until they are.
 - `GITHUB_PAT` renewed; expires 2027-10-30.
