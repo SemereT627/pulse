@@ -93,21 +93,35 @@ async function completeAnthropic(apiKey: string, model: string, req: Completion)
   return response.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("");
 }
 
+const RETRYABLE = new Set([429, 500, 502, 503]);
+const RETRY_WAITS_MS = [2_000, 6_000];
+
 async function completeOpenAiCompatible(id: ProviderId, apiKey: string, model: string, req: Completion) {
   const p = PROVIDERS[id];
   // No token cap: newer OpenAI models reject `max_tokens`, and the prompt already asks for a few paragraphs.
-  const res = await fetch(`${p.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...p.headers },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: req.system },
-        { role: "user", content: req.user },
-      ],
-    }),
+  const body = JSON.stringify({
+    model,
+    messages: [
+      { role: "system", content: req.system },
+      { role: "user", content: req.user },
+    ],
   });
-  if (!res.ok) throw new Error(await apiError(p.label, res));
+  const send = () =>
+    fetch(`${p.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}`, ...p.headers },
+      body,
+    });
+
+  // Busy or rate-limited models (Gemini's newest often 503s) usually recover within seconds.
+  let res = await send();
+  for (const waitMs of RETRY_WAITS_MS) {
+    if (!RETRYABLE.has(res.status)) break;
+    await res.body?.cancel();
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await send();
+  }
+  if (!res.ok) throw new Error(await apiError(p.label, res, model));
 
   type Choice = { message?: { content?: string | null; refusal?: string | null }; finish_reason?: string };
   const data = await readJson<{ choices?: Choice[] }>(p.label, res);
@@ -149,7 +163,7 @@ async function readJson<T>(label: string, res: Response): Promise<T> {
   }
 }
 
-async function apiError(label: string, res: Response) {
+async function apiError(label: string, res: Response, model?: string) {
   const body = await res.text().catch(() => "");
   let detail = body.slice(0, 300);
   try {
@@ -159,5 +173,7 @@ async function apiError(label: string, res: Response) {
     detail = (typeof json.error === "string" ? json.error : json.error?.message) ?? json.message ?? detail;
   } catch {}
   if (res.status === 401 || res.status === 403) return `${label} rejected the key (${res.status}): ${detail}`;
+  if (model && RETRYABLE.has(res.status))
+    return `${label} is busy (${res.status}) and still was after retrying. Try again shortly, or pick another model than ${model} in Settings.`;
   return `${label} error ${res.status}: ${detail}`;
 }
