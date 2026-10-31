@@ -51,7 +51,9 @@ Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-sec
 
 Next:
 - AI summary not yet run live. No Anthropic key available. On this machine `models.github.ai` is intercepted (returns plain "OK", malformed DNS), so GitHub Models can't be tested locally; try it on Vercel, or get a Gemini key (free tier). Smoke: `SMOKE_PROVIDER=gemini pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
-- Deploy to Vercel (import repo, copy env vars, add domain `pulse.semere.app` with CNAME `pulse` → `cname.vercel-dns.com`, check the cron is listed).
-- `GITHUB_PAT` expires 2026-11-29; regenerate with a longer expiry (also in Vercel).
+- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. The GitHub repo is NOT connected (Vercel's GitHub app can't see `semere-wazza`), so pushes don't deploy: run `vercel deploy --prod`, or install the Vercel app on `semere-wazza` and connect the repo.
+- `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
+- Production needs its own GitHub OAuth app (callback `https://pulse.semere.app/api/auth/callback/github`); `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` aren't in Vercel yet, so production sign-in doesn't work until they are.
+- `GITHUB_PAT` renewed; expires 2027-10-30.
 - Not built: emailing the report (Resend).
 - To count `SemereT627` commits, add it under Settings → What counts.
