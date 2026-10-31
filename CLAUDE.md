@@ -51,7 +51,7 @@ Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-sec
 
 Next:
 - AI summary not yet run live. No Anthropic key available. On this machine `models.github.ai` is intercepted (returns plain "OK", malformed DNS), so GitHub Models can't be tested locally; try it on Vercel, or get a Gemini key (free tier). Smoke: `SMOKE_PROVIDER=gemini pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
-- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. Connect `SemereT627/pulse` in Vercel (project → Settings → Git) so pushes to `main` deploy; until then, `vercel deploy --prod`.
+- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. Git-connected to `SemereT627/pulse`: pushes to `main` deploy to production automatically.
 - `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
 - Production needs its own GitHub OAuth app (callback `https://pulse.semere.app/api/auth/callback/github`); `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` aren't in Vercel yet, so production sign-in doesn't work until they are.
 - `GITHUB_PAT` renewed; expires 2027-10-30.
