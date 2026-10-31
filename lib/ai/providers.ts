@@ -88,7 +88,7 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
   deepseek: {
     label: "DeepSeek",
     env: ["DEEPSEEK_API_KEY"],
-    defaultModel: "deepseek-chat",
+    defaultModel: "deepseek-flash",
     baseUrl: "https://api.deepseek.com/v1",
     modelsUrl: "/models",
     hint: "DEEPSEEK_API_KEY from platform.deepseek.com (paid, low cost)",
@@ -117,8 +117,18 @@ export type Completion = { system: string; user: string; maxTokens: number };
 export async function complete(id: ProviderId, model: string, req: Completion): Promise<string> {
   const key = providerKey(id);
   if (!key) throw new Error(`${PROVIDERS[id].label} has no API key (${PROVIDERS[id].hint}).`);
-  return id === "anthropic" ? completeAnthropic(key.value, model, req) : completeOpenAiCompatible(id, key.value, model, req);
+  if (id !== "anthropic") return completeOpenAiCompatible(id, key.value, model, req);
+  try {
+    return await completeAnthropic(key.value, model, req);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    throw new Error(OUT_OF_CREDIT.test(message) ? noCredit("Anthropic") : message);
+  }
 }
+
+// Billing failures (OpenAI sends them as 429, DeepSeek as 402) won't clear up by retrying.
+const OUT_OF_CREDIT = /insufficient_quota|credit_balance|credit balance|no credits|insufficient balance/i;
+const noCredit = (label: string) => `Your ${label} account has no credit left. Add credit there, or switch provider in Settings.`;
 
 async function completeAnthropic(apiKey: string, model: string, req: Completion) {
   const response = await new Anthropic({ apiKey }).beta.messages.create({
@@ -160,6 +170,7 @@ async function completeOpenAiCompatible(id: ProviderId, apiKey: string, model: s
   let res = await send();
   for (const waitMs of RETRY_WAITS_MS) {
     if (!RETRYABLE.has(res.status)) break;
+    if (res.status === 429 && OUT_OF_CREDIT.test(await res.clone().text())) break;
     await res.body?.cancel();
     await new Promise((r) => setTimeout(r, waitMs));
     res = await send();
@@ -215,6 +226,7 @@ async function apiError(label: string, res: Response, model?: string) {
     const json = (Array.isArray(parsed) ? parsed[0] : parsed) as { error?: { message?: string } | string; message?: string };
     detail = (typeof json.error === "string" ? json.error : json.error?.message) ?? json.message ?? detail;
   } catch {}
+  if (res.status === 402 || OUT_OF_CREDIT.test(body)) return noCredit(label);
   if (res.status === 401 || res.status === 403) return `${label} rejected the key (${res.status}): ${detail}`;
   if (model && RETRYABLE.has(res.status))
     return `${label} is busy (${res.status}) and still was after retrying. Try again shortly, or pick another model than ${model} in Settings.`;
