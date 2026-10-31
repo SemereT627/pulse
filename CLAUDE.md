@@ -24,6 +24,7 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 - `lib/github/`: `client.ts` (`gh()` wrapper records rate limit after each call), `repos.ts` (repo discovery/sync), `activity.ts` (batched commit/release queries, PR/issue search, reviews via contributionsCollection).
 - `lib/report/`: pure `week.ts`, `aggregate.ts`, `markdown.ts` (unit-tested); `load.ts` (snapshot cache: in-progress week refetches after 15 min, branch-config change refetches that repo); `generate.ts` (writes `reports` rows).
 - `lib/report/collaborators.ts`: pure; people from my PRs' reviewers + authors of PRs I reviewed (Contributors page). `UserSnapshot.v` (`USER_SNAPSHOT_VERSION`) forces a refetch of cached user snapshots when fields are added.
+- Summaries are editable on Reports (`saveSummaryAction`); hand edits mark `narrativeModel` with " · edited" or "Written by you" (`lib/report/edited.ts`), and Rewrite asks before replacing them. The cron never overwrites an existing summary.
 - `lib/report/selected.ts`: `selectedWeek(searchParams)` resolves `?week=YYYY-MM-DD` (snapped, future → current); every week-scoped page uses it.
 - `lib/ai/summary.ts`: pure prompt builders (tested); `narrative.ts`: calls the provider; `providers.ts`: provider table, `complete()`, `listModels()` (Settings "Test" button).
 - UI: dashboard shell in `app/(app)/layout.tsx` + `components/shell/` (sidebar, top bar with week picker and user menu, mobile drawer). Sections: `/` Overview, `/reports` (report + archive), `/repositories` (activity) and `/repositories/manage` (tracked repos), `/contributors`, `/settings` (cron/AI toggles, connection status). Selected week lives in `?week=`; sidebar links carry it. Old `/week/:week` and `/sources` redirect in `next.config.ts`.
@@ -55,5 +56,5 @@ Next:
 - `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
 - One GitHub OAuth app serves local and production (it has both redirect URIs); its credentials are in Vercel.
 - `GITHUB_PAT` renewed; expires 2027-10-30.
-- Not built: emailing the report (Resend).
+- Email (Resend) is paused by choice: the user copies the summary/Markdown from Reports. Don't build it unless asked.
 - To count `SemereT627` commits, add it under Settings → What counts.

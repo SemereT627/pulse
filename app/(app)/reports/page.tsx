@@ -8,7 +8,7 @@ import { ExportButtons } from "@/components/export-buttons";
 import { SummaryCard } from "@/components/summary-card";
 import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, Skeleton } from "@/components/ui";
 import { aiReady } from "@/lib/ai/providers";
-import { getReport, markdownOptions } from "@/lib/report/generate";
+import { getReport, isEdited, markdownOptions } from "@/lib/report/generate";
 import { loadWeek } from "@/lib/report/load";
 import { toMarkdown } from "@/lib/report/markdown";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
@@ -59,7 +59,7 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
           title={fmtRange(week.startDate, week.endDate)}
           description={
             savedAt
-              ? `Saved ${savedAt} by ${report!.trigger === "cron" ? "the Friday cron" : "you"}${report!.narrativeModel ? ` · summary by ${report!.narrativeModel}` : ""}`
+              ? `Saved ${savedAt} by ${report!.trigger === "cron" ? "the Friday cron" : "you"}${report!.narrativeModel ? ` · summary: ${report!.narrativeModel}` : ""}`
               : "Not saved yet. The Friday cron saves each finished week; writing a summary saves it too."
           }
           actions={
@@ -73,24 +73,14 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
           <EmptyState title="No repos tracked yet">Choose repositories first, then come back for the report.</EmptyState>
         ) : (
           <>
-            {aiOn ? (
-              <SummaryCard
-                weekStart={week.startDate}
-                narrative={narrative}
-                hasActivity={stats.repos.length > 0}
-                isCurrent={isCurrent}
-              />
-            ) : (
-              <Panel>
-                <p className="text-sm text-muted">
-                  {settings.aiEnabled ? "The AI provider has no API key yet." : "AI summaries are off."}{" "}
-                  <Link href="/settings#ai" className="text-foreground underline underline-offset-4 hover:text-accent">
-                    Set them up in Settings
-                  </Link>{" "}
-                  to get a first-person update for your manager; the Markdown below has the stats either way.
-                </p>
-              </Panel>
-            )}
+            <SummaryCard
+              weekStart={week.startDate}
+              narrative={narrative}
+              hasActivity={stats.repos.length > 0}
+              isCurrent={isCurrent}
+              aiOn={aiOn}
+              edited={isEdited(report?.narrativeModel ?? null)}
+            />
 
             <Panel title="Markdown" action={`${markdown.split("\n").length} lines`}>
               <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-muted">

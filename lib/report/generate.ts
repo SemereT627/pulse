@@ -47,3 +47,5 @@ export async function generateReport(week: WeekWindow, trigger: "cron" | "manual
 export function markdownOptions(settings: Settings, narrative: string | null) {
   return { author: settings.reportAuthor?.trim() || process.env.REPORT_NAME, narrative, sections: settings.mdSections };
 }
+
+export { editedModel, isEdited } from "./edited";

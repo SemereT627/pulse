@@ -107,8 +107,8 @@ async function SettingsSections() {
             <Status ok={!!p.keyEnv}>{p.keyEnv ? <span className="font-mono text-xs">{p.keyEnv}</span> : "No key"}</Status>
           </Row>
         ))}
-        <Row label="Email delivery" hint="Sending the report by email isn't built yet.">
-          <Status ok={false}>Not set up</Status>
+        <Row label="Email delivery" hint="On hold: copy the summary or Markdown from Reports instead.">
+          <Status ok={false}>Paused</Status>
         </Row>
       </Section>
 
