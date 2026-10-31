@@ -35,7 +35,7 @@ export const PROVIDERS: Record<ProviderId, Provider> = {
   gemini: {
     label: "Google Gemini",
     env: ["GEMINI_API_KEY"],
-    defaultModel: "gemini-2.5-flash",
+    defaultModel: "gemini-3.8-flash", // 2.5 is closed to new keys
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     modelsUrl: "/models",
     hint: "GEMINI_API_KEY from aistudio.google.com (free tier)",
@@ -153,7 +153,9 @@ async function apiError(label: string, res: Response) {
   const body = await res.text().catch(() => "");
   let detail = body.slice(0, 300);
   try {
-    const json = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    // Gemini wraps its error object in an array.
+    const parsed = JSON.parse(body) as unknown;
+    const json = (Array.isArray(parsed) ? parsed[0] : parsed) as { error?: { message?: string } | string; message?: string };
     detail = (typeof json.error === "string" ? json.error : json.error?.message) ?? json.message ?? detail;
   } catch {}
   if (res.status === 401 || res.status === 403) return `${label} rejected the key (${res.status}): ${detail}`;
