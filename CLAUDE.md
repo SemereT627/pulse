@@ -50,7 +50,7 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-section dashboard (sidebar, Overview/Reports/Repositories/Contributors/Settings), Markdown export, cron, multi-provider AI summary, configurable settings. 26 tests.
 
 Next:
-- AI provider is Gemini (`GEMINI_API_KEY` in `.env.local` and Vercel; default model `gemini-3.8-flash`, since 2.5 is closed to new keys). Key verified; a full summary hasn't been written yet. The dev machine is often on a flaky phone hotspot (GitHub/Neon/Gemini timeouts, `models.github.ai` intercepted), so prefer testing on production. Smoke: `SMOKE_PROVIDER=gemini pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
+- AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary; verified live 2026-10-31 on last week's data). Gemini is set up as a backup (`gemini-3.8-flash` often 503s under load). Keys in `.env.local` and Vercel. The dev machine is often on a flaky phone hotspot (GitHub/Neon timeouts, `models.github.ai` intercepted), so prefer testing on production. Smoke: `SMOKE_PROVIDER=groq pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
 - Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. Git-connected to `SemereT627/pulse`: pushes to `main` deploy to production automatically.
 - `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
 - One GitHub OAuth app serves local and production (it has both redirect URIs); its credentials are in Vercel.
