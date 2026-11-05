@@ -1,125 +1,119 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import type { Settings } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { aiKeys, type Settings } from "@/db/schema";
+import { decrypt } from "@/lib/crypto";
 
 export type ProviderId = Settings["aiProvider"];
 
 type Provider = {
   label: string;
-  /** Env vars holding the key, first one set wins. */
-  env: string[];
   defaultModel: string;
   /** OpenAI-compatible chat completions base URL; absent = Anthropic's own API. */
   baseUrl?: string;
   /** Lists model ids, relative to baseUrl unless absolute. */
   modelsUrl?: string;
   headers?: Record<string, string>;
+  /** Where to get a key. */
   hint: string;
 };
 
 export const PROVIDERS: Record<ProviderId, Provider> = {
   anthropic: {
     label: "Anthropic",
-    env: ["ANTHROPIC_API_KEY"],
     defaultModel: "claude-opus-5-5",
-    hint: "ANTHROPIC_API_KEY from console.anthropic.com",
+    hint: "console.anthropic.com",
   },
   openai: {
     label: "OpenAI",
-    env: ["OPENAI_API_KEY"],
     defaultModel: "gpt-5-mini",
     baseUrl: "https://api.openai.com/v1",
     modelsUrl: "/models",
-    hint: "OPENAI_API_KEY from platform.openai.com",
+    hint: "platform.openai.com",
   },
   gemini: {
     label: "Google Gemini",
-    env: ["GEMINI_API_KEY"],
     defaultModel: "gemini-3.8-flash", // 2.5 is closed to new keys
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     modelsUrl: "/models",
-    hint: "GEMINI_API_KEY from aistudio.google.com (free tier)",
+    hint: "aistudio.google.com (free tier)",
   },
   github: {
     label: "GitHub Models",
-    // A token with the Models permission; falls back to the data PAT, which may or may not have it.
-    env: ["GITHUB_MODELS_TOKEN", "GITHUB_PAT"],
+    // Needs a token with the Models permission; the sign-in token doesn't carry it.
     defaultModel: "openai/gpt-4.1-mini",
     baseUrl: "https://models.github.ai/inference",
     modelsUrl: "https://models.github.ai/catalog/models",
     headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
-    hint: "GITHUB_MODELS_TOKEN (fine-grained, Models: read), or GITHUB_PAT if it has access",
+    hint: "a fine-grained GitHub token with Models: read",
   },
   // Default models below were current when added; the Test button in Settings lists what each key can use.
   groq: {
     label: "Groq",
-    env: ["GROQ_API_KEY"],
     defaultModel: "openai/gpt-oss-120b",
     baseUrl: "https://api.groq.com/openai/v1",
     modelsUrl: "/models",
-    hint: "GROQ_API_KEY from console.groq.com (free tier)",
+    hint: "console.groq.com (free tier)",
   },
   openrouter: {
     label: "OpenRouter",
-    env: ["OPENROUTER_API_KEY"],
     defaultModel: "openrouter/auto",
     baseUrl: "https://openrouter.ai/api/v1",
     modelsUrl: "/models",
     // Optional attribution headers OpenRouter asks apps to send.
     headers: { "HTTP-Referer": "https://pulse.semere.app", "X-Title": "Pulse" },
-    hint: "OPENROUTER_API_KEY from openrouter.ai/keys (free models end in :free)",
+    hint: "openrouter.ai/keys (free models end in :free)",
   },
   mistral: {
     label: "Mistral",
-    env: ["MISTRAL_API_KEY"],
     defaultModel: "mistral-medium-latest",
     baseUrl: "https://api.mistral.ai/v1",
     modelsUrl: "/models",
-    hint: "MISTRAL_API_KEY from console.mistral.ai (free Experiment tier)",
+    hint: "console.mistral.ai (free Experiment tier)",
   },
   cerebras: {
     label: "Cerebras",
-    env: ["CEREBRAS_API_KEY"],
     defaultModel: "gpt-oss-120b",
     baseUrl: "https://api.cerebras.ai/v1",
     modelsUrl: "/models",
-    hint: "CEREBRAS_API_KEY from cloud.cerebras.ai (free tier)",
+    hint: "cloud.cerebras.ai (free tier)",
   },
   deepseek: {
     label: "DeepSeek",
-    env: ["DEEPSEEK_API_KEY"],
     defaultModel: "deepseek-flash",
     baseUrl: "https://api.deepseek.com/v1",
     modelsUrl: "/models",
-    hint: "DEEPSEEK_API_KEY from platform.deepseek.com (paid, low cost)",
+    hint: "platform.deepseek.com (paid, low cost)",
   },
 };
 
 export const isProviderId = (v: unknown): v is ProviderId => typeof v === "string" && v in PROVIDERS;
 
-export function providerKey(id: ProviderId): { name: string; value: string } | null {
-  for (const name of PROVIDERS[id].env) {
-    const value = process.env[name];
-    if (value) return { name, value };
-  }
-  return null;
+export type AiKeys = Partial<Record<ProviderId, string>>;
+
+/** The user's saved AI keys, decrypted. Server-only: never pass these to a client component. */
+export async function getAiKeys(userId: number): Promise<AiKeys> {
+  const rows = await db.select().from(aiKeys).where(eq(aiKeys.userId, userId));
+  return Object.fromEntries(rows.filter((r) => isProviderId(r.provider)).map((r) => [r.provider, decrypt(r.key)]));
 }
+
+export const noKey = (id: ProviderId) => `Add your ${PROVIDERS[id].label} API key in Settings (get one at ${PROVIDERS[id].hint}).`;
 
 export const modelFor = (settings: Pick<Settings, "aiProvider" | "aiModel">) =>
   settings.aiModel?.trim() || PROVIDERS[settings.aiProvider].defaultModel;
 
 /** Whether summaries can actually be written: switched on and the chosen provider has a key. */
-export const aiReady = (settings: Pick<Settings, "aiEnabled" | "aiProvider">) =>
-  settings.aiEnabled && providerKey(settings.aiProvider) !== null;
+export const aiReady = (settings: Pick<Settings, "aiEnabled" | "aiProvider">, keys: AiKeys) =>
+  settings.aiEnabled && !!keys[settings.aiProvider];
 
 export type Completion = { system: string; user: string; maxTokens: number };
 
-export async function complete(id: ProviderId, model: string, req: Completion): Promise<string> {
-  const key = providerKey(id);
-  if (!key) throw new Error(`${PROVIDERS[id].label} has no API key (${PROVIDERS[id].hint}).`);
-  if (id !== "anthropic") return completeOpenAiCompatible(id, key.value, model, req);
+export async function complete(id: ProviderId, apiKey: string | undefined, model: string, req: Completion): Promise<string> {
+  if (!apiKey) throw new Error(noKey(id));
+  if (id !== "anthropic") return completeOpenAiCompatible(id, apiKey, model, req);
   try {
-    return await completeAnthropic(key.value, model, req);
+    return await completeAnthropic(apiKey, model, req);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     throw new Error(OUT_OF_CREDIT.test(message) ? noCredit("Anthropic") : message);
@@ -186,18 +180,17 @@ async function completeOpenAiCompatible(id: ProviderId, apiKey: string, model: s
 }
 
 /** Model ids the key can use; doubles as a connection test. */
-export async function listModels(id: ProviderId): Promise<string[]> {
-  const key = providerKey(id);
-  if (!key) throw new Error(`No key set. Add ${PROVIDERS[id].hint}.`);
+export async function listModels(id: ProviderId, apiKey: string | undefined): Promise<string[]> {
+  if (!apiKey) throw new Error(noKey(id));
 
   if (id === "anthropic") {
-    const page = await new Anthropic({ apiKey: key.value }).models.list({ limit: 100 });
+    const page = await new Anthropic({ apiKey }).models.list({ limit: 100 });
     return page.data.map((m) => m.id);
   }
 
   const p = PROVIDERS[id];
   const url = p.modelsUrl!.startsWith("http") ? p.modelsUrl! : `${p.baseUrl}${p.modelsUrl}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${key.value}`, ...p.headers } });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}`, ...p.headers } });
   if (!res.ok) throw new Error(await apiError(p.label, res));
   const data = await readJson<{ data?: { id: string }[] } | { id: string }[]>(p.label, res);
   const rows = Array.isArray(data) ? data : (data.data ?? []);

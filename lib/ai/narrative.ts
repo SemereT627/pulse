@@ -5,10 +5,15 @@ import { complete, modelFor, PROVIDERS } from "./providers";
 import { systemPrompt, userPrompt } from "./summary";
 
 /** Writes the week's narrative with the provider and options from settings. `model` is stored with the report. */
-export async function generateNarrative(stats: WeekStats, previousNarrative: string | null, settings: Settings) {
+export async function generateNarrative(
+  stats: WeekStats,
+  previousNarrative: string | null,
+  settings: Settings,
+  apiKey: string | undefined,
+) {
   const model = modelFor(settings);
   const text = (
-    await complete(settings.aiProvider, model, {
+    await complete(settings.aiProvider, apiKey, model, {
       system: systemPrompt(settings),
       user: userPrompt(stats, settings.aiUsePrevious ? previousNarrative : null),
       maxTokens: 16000,

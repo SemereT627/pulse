@@ -1,15 +1,19 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { generateNarrative } from "@/lib/ai/narrative";
+import { getAiKeys } from "@/lib/ai/providers";
 import { getSettings, loadWeek } from "./load";
 import { toMarkdown } from "./markdown";
 import { previousWeek, type WeekWindow } from "./week";
-import type { Settings } from "@/db/schema";
+import type { Settings, User } from "@/db/schema";
 
-export async function getReport(weekStart: string) {
-  const [row] = await db.select().from(reports).where(eq(reports.weekStart, weekStart));
+export async function getReport(user: Pick<User, "id">, weekStart: string) {
+  const [row] = await db
+    .select()
+    .from(reports)
+    .where(and(eq(reports.userId, user.id), eq(reports.weekStart, weekStart)));
   return row ?? null;
 }
 
@@ -17,11 +21,16 @@ export async function getReport(weekStart: string) {
  * Build the week's stats + Markdown (and optionally the AI narrative) and store them in `reports`,
  * one row per week, replaced on rerun. Without `withNarrative`, an existing narrative is kept.
  */
-export async function generateReport(week: WeekWindow, trigger: "cron" | "manual", opts: { withNarrative?: boolean } = {}) {
+export async function generateReport(
+  user: User,
+  week: WeekWindow,
+  trigger: "cron" | "manual",
+  opts: { withNarrative?: boolean } = {},
+) {
   const [{ stats, fetchError }, existing, settings] = await Promise.all([
-    loadWeek(week),
-    getReport(week.startDate),
-    getSettings(),
+    loadWeek(user, week),
+    getReport(user, week.startDate),
+    getSettings(user),
   ]);
   // A saved report should reflect GitHub, not whatever happened to be cached when the network dropped.
   if (fetchError) throw new Error(`Couldn't reach GitHub, so the report wasn't saved: ${fetchError}`);
@@ -29,23 +38,29 @@ export async function generateReport(week: WeekWindow, trigger: "cron" | "manual
   let narrative = existing?.narrative ?? null;
   let narrativeModel = existing?.narrativeModel ?? null;
   if (opts.withNarrative && stats.repos.length > 0) {
-    const previous = await getReport(previousWeek(week).startDate);
-    ({ text: narrative, model: narrativeModel } = await generateNarrative(stats, previous?.narrative ?? null, settings));
+    const [previous, keys] = await Promise.all([getReport(user, previousWeek(week).startDate), getAiKeys(user.id)]);
+    ({ text: narrative, model: narrativeModel } = await generateNarrative(
+      stats,
+      previous?.narrative ?? null,
+      settings,
+      keys[settings.aiProvider],
+    ));
   }
 
-  const markdown = toMarkdown(stats, week, markdownOptions(settings, narrative));
+  const markdown = toMarkdown(stats, week, markdownOptions(user, settings, narrative));
   const values = { weekEnd: week.endDate, stats, narrative, narrativeModel, markdown, trigger, generatedAt: new Date() };
 
   const [row] = await db
     .insert(reports)
-    .values({ weekStart: week.startDate, ...values })
-    .onConflictDoUpdate({ target: reports.weekStart, set: values })
+    .values({ userId: user.id, weekStart: week.startDate, ...values })
+    .onConflictDoUpdate({ target: [reports.userId, reports.weekStart], set: values })
     .returning();
   return row;
 }
 
-export function markdownOptions(settings: Settings, narrative: string | null) {
-  return { author: settings.reportAuthor?.trim() || process.env.REPORT_NAME, narrative, sections: settings.mdSections };
+export function markdownOptions(user: Pick<User, "name" | "login">, settings: Settings, narrative: string | null) {
+  const author = settings.reportAuthor?.trim() || user.name?.trim() || user.login;
+  return { author, narrative, sections: settings.mdSections };
 }
 
 export { editedModel, isEdited } from "./edited";

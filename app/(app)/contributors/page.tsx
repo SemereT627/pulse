@@ -7,6 +7,7 @@ import { collaborators, hasCollaboratorData, type CollabLink, type Collaborator 
 import { loadWeek } from "@/lib/report/load";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
 import { fmtRange } from "@/lib/format";
+import { currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Contributors" };
 
@@ -19,8 +20,9 @@ export default function ContributorsPage({ searchParams }: PageProps<"/contribut
 }
 
 async function People({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { week, isCurrent, now } = await selectedWeek(searchParams);
-  const { stats, fetchedAt, fetchError } = await loadWeek(week);
+  const user = await currentUser();
+  const { week, isCurrent, now } = await selectedWeek(user, searchParams);
+  const { stats, fetchedAt, fetchError } = await loadWeek(user, week);
   const people = collaborators(stats.repos);
   const complete = hasCollaboratorData(stats.repos);
   const reviewedMine = people.filter((p) => p.reviewedMine.length > 0).length;

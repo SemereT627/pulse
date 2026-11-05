@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { User } from "@/db/schema";
 import Link from "next/link";
 import { DayBars } from "@/components/day-bars";
 import { SparkIcon } from "@/components/icons";
@@ -6,14 +7,16 @@ import { RegenerateButton } from "@/components/regenerate-button";
 import { StatCards } from "@/components/stat-cards";
 import { WeekTrend } from "@/components/week-trend";
 import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, PanelLink, Skeleton, primaryButtonClass } from "@/components/ui";
-import { aiReady } from "@/lib/ai/providers";
+import { aiReady, getAiKeys } from "@/lib/ai/providers";
 import { deltas } from "@/lib/report/aggregate";
 import { getReport } from "@/lib/report/generate";
 import { includedSources, loadWeek } from "@/lib/report/load";
+import { syncIfEmpty } from "@/lib/github/repos";
 import { selectedWeek } from "@/lib/report/selected";
 import { addDays, previousWeek, weekFrom, weekQuery, type WeekWindow } from "@/lib/report/week";
 import type { RepoActivity } from "@/lib/report/types";
 import { fmtAgo, fmtNumber, fmtRange } from "@/lib/format";
+import { currentUser } from "@/lib/session";
 
 const TREND_WEEKS = 8;
 
@@ -26,12 +29,14 @@ export default function OverviewPage({ searchParams }: PageProps<"/">) {
 }
 
 async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
+  const user = await currentUser();
   const [{ settings, now, current, week, isCurrent }, sources] = await Promise.all([
-    selectedWeek(searchParams),
-    includedSources(),
+    selectedWeek(user, searchParams),
+    includedSources(user),
   ]);
 
   if (sources.length === 0) {
+    await syncIfEmpty(user);
     return (
       <EmptyState
         title="No repos tracked yet"
@@ -49,10 +54,11 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
   // A week in progress is compared with last week up to the same point, not the whole of it.
   const prev = previousWeek(week);
   const cutoff = isCurrent ? new Date(prev.start.getTime() + (now.getTime() - week.start.getTime())) : undefined;
-  const [thisWeek, lastWeek, report] = await Promise.all([
-    loadWeek(week, { sources }),
-    loadWeek(prev, { sources, cutoff }),
-    getReport(week.startDate),
+  const [thisWeek, lastWeek, report, keys] = await Promise.all([
+    loadWeek(user, week, { sources }),
+    loadWeek(user, prev, { sources, cutoff }),
+    getReport(user, week.startDate),
+    getAiKeys(user.id),
   ]);
   const { stats } = thisWeek;
   const q = weekQuery(week.startDate, current.startDate);
@@ -92,7 +98,7 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
         <SummaryPreview
           narrative={report?.narrative ?? null}
           href={`/reports${q}`}
-          aiOn={aiReady(settings)}
+          aiOn={aiReady(settings, keys)}
           hasActivity={stats.repos.length > 0}
         />
       </div>
@@ -108,16 +114,26 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
 
       <Panel title={`Last ${TREND_WEEKS} weeks`} action="commits and PRs merged per week">
         <Suspense fallback={<Skeleton className="h-44 bg-surface-2" />}>
-          <Trend weeks={trendWeeks} current={current.startDate} selected={week.startDate} />
+          <Trend user={user} weeks={trendWeeks} current={current.startDate} selected={week.startDate} />
         </Suspense>
       </Panel>
     </div>
   );
 }
 
-async function Trend({ weeks, current, selected }: { weeks: WeekWindow[]; current: string; selected: string }) {
+async function Trend({
+  user,
+  weeks,
+  current,
+  selected,
+}: {
+  user: User;
+  weeks: WeekWindow[];
+  current: string;
+  selected: string;
+}) {
   // Past weeks are cached snapshots after their first load, so this is cheap on repeat visits.
-  const loaded = await Promise.all(weeks.map((w) => loadWeek(w)));
+  const loaded = await Promise.all(weeks.map((w) => loadWeek(user, w)));
   return (
     <WeekTrend
       weeks={weeks.map((w, i) => ({

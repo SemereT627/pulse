@@ -1,39 +1,59 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 
-// Comma-separated GitHub logins allowed to sign in, e.g. "semere-wazza,SemereT627".
-const allowedUsers = new Set(
-  (process.env.ALLOWED_USERS ?? "")
-    .split(",")
-    .map((u) => u.trim().toLowerCase())
-    .filter(Boolean),
-);
-
 declare module "next-auth" {
   interface Session {
-    user: { login: string; name?: string | null; image?: string | null };
+    user: { userId: number; login: string; name?: string | null; image?: string | null };
   }
 }
 
+type GitHubProfile = { id: number; login: string; name?: string | null; avatar_url?: string | null };
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // Sign-in gate only: GitHub data is fetched with GITHUB_PAT, so request no extra scopes.
-  providers: [GitHub({ authorization: { params: { scope: "read:user" } } })],
+  // Anyone can sign in; their own token reads their own GitHub activity.
+  providers: [GitHub({ authorization: { params: { scope: "read:user repo read:org" } } })],
   pages: { signIn: "/signin", error: "/signin" },
   callbacks: {
-    signIn({ profile }) {
-      const login = typeof profile?.login === "string" ? profile.login.toLowerCase() : "";
-      return allowedUsers.has(login);
-    },
-    jwt({ token, profile }) {
-      if (typeof profile?.login === "string") token.login = profile.login;
+    // `account` and `profile` are only present on sign-in: store the user and their token, keep only our id in the JWT.
+    async jwt({ token, account, profile }) {
+      if (account && profile) {
+        // Imported here so proxy.ts (which only checks the JWT) and build-time route analysis don't load the DB.
+        const [{ sql }, { db }, { users }, { encrypt }] = await Promise.all([
+          import("drizzle-orm"),
+          import("@/db"),
+          import("@/db/schema"),
+          import("@/lib/crypto"),
+        ]);
+        const p = profile as unknown as GitHubProfile;
+        const values = {
+          login: p.login,
+          name: p.name ?? null,
+          avatarUrl: p.avatar_url ?? null,
+          ...(account.access_token && { oauthToken: encrypt(account.access_token) }),
+          lastSeenAt: new Date(),
+        };
+        const [row] = await db
+          .insert(users)
+          .values({ githubId: p.id, ...values })
+          // A fresh sign-in fixes a rejected sign-in token, not a rejected PAT (which is used first).
+          .onConflictDoUpdate({
+            target: users.githubId,
+            set: { ...values, tokenInvalid: sql`${users.pat} is not null and ${users.tokenInvalid}` },
+          })
+          .returning({ id: users.id });
+        token.uid = row.id;
+        token.login = p.login;
+      }
       return token;
     },
     session({ session, token }) {
+      session.user.userId = token.uid as number;
       session.user.login = token.login as string;
       return session;
     },
+    // Sessions from before multi-user carry no uid: treat them as signed out.
     authorized({ auth }) {
-      return !!auth?.user;
+      return typeof auth?.user?.userId === "number";
     },
   },
 });

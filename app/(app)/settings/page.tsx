@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { connection } from "next/server";
-import { auth } from "@/auth";
 import { PageHeader, Skeleton } from "@/components/ui";
-import { modelFor, PROVIDERS, providerKey, type ProviderId } from "@/lib/ai/providers";
+import { getAiKeys, modelFor, PROVIDERS, type ProviderId } from "@/lib/ai/providers";
+import { decrypt, lastFour } from "@/lib/crypto";
 import { getRateLimit, getSettings, includedSources } from "@/lib/report/load";
 import { fmtIn, fmtNumber } from "@/lib/format";
-import { AiForm, CountsForm, ReportForm, ThemePicker } from "./forms";
+import { currentUser } from "@/lib/session";
+import { AiForm, CountsForm, DeleteAccount, PatForm, ReportForm, ThemePicker, WeekForm } from "./forms";
 import { Toggle } from "./toggle";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -26,8 +26,13 @@ export default function SettingsPage() {
 }
 
 async function SettingsSections() {
-  await connection(); // before auth(), see TopbarUserMenu
-  const [settings, rate, sources, session] = await Promise.all([getSettings(), getRateLimit(), includedSources(), auth()]);
+  const user = await currentUser();
+  const [settings, rate, sources, keys] = await Promise.all([
+    getSettings(user),
+    getRateLimit(user),
+    includedSources(user),
+    getAiKeys(user.id),
+  ]);
   const endDay = DAYS[(settings.weekStartDay + 6) % 7];
   const ids = Object.keys(PROVIDERS) as ProviderId[];
   const providers = ids.map((id) => ({
@@ -35,8 +40,9 @@ async function SettingsSections() {
     label: PROVIDERS[id].label,
     defaultModel: PROVIDERS[id].defaultModel,
     hint: PROVIDERS[id].hint,
-    keyEnv: providerKey(id)?.name ?? null, // the env var's name only; the key never leaves the server
+    savedKey: keys[id] ? lastFour(keys[id]) : null, // masked; the key never leaves the server
   }));
+  const savedPat = user.pat ? lastFour(decrypt(user.pat)) : null;
   const active = providers.find((p) => p.id === settings.aiProvider)!;
   // vercel.json runs the cron daily at 12:00 UTC; show it in the report's timezone.
   const cronTime = new Intl.DateTimeFormat("en-US", {
@@ -52,7 +58,7 @@ async function SettingsSections() {
         <Row
           label="Write summaries"
           hint={
-            active.keyEnv
+            active.savedKey
               ? `Using ${active.label} · ${modelFor(settings)}`
               : `${active.label} has no key yet, so nothing is written until you add one or switch provider.`
           }
@@ -71,16 +77,11 @@ async function SettingsSections() {
           hint={`Saves the finished week every ${DAYS[settings.reportDay]} at ${cronTime}. A summary already written is kept.`}
           control={<Toggle name="cronEnabled" label="Automatic report" checked={settings.cronEnabled} />}
         />
-        <ReportForm settings={settings} envAuthor={process.env.REPORT_NAME ?? null} cronTime={cronTime} />
+        <ReportForm settings={settings} defaultAuthor={user.name ?? user.login} cronTime={cronTime} />
       </Section>
 
-      <Section title="Report week" description="Fixed; changing these would shift every stored week.">
-        <Row label="Week runs">
-          {DAYS[settings.weekStartDay]} 00:00 → {endDay} 23:59
-        </Row>
-        <Row label="Timezone">
-          <span className="font-mono text-xs">{settings.timezone}</span>
-        </Row>
+      <Section title="Report week" description={`${DAYS[settings.weekStartDay]} 00:00 → ${endDay} 23:59, ${settings.timezone}.`}>
+        <WeekForm settings={settings} timezones={Intl.supportedValuesOf("timeZone")} />
         <Row label="Tracked repos">
           <Link href="/repositories/manage" className="hover:text-accent">
             {sources.length} repos →
@@ -92,8 +93,12 @@ async function SettingsSections() {
         <Row label="Theme" control={<ThemePicker />} />
       </Section>
 
-      <Section title="Connections" description="Keys live in environment variables (.env.local, and Vercel when deployed).">
-        <Row label="GitHub" hint="All data comes from GITHUB_PAT (repo, read:org, read:user).">
+      <Section title="GitHub" description="Pulse reads your activity with your own GitHub access.">
+        <Row label="Reading with" hint={user.tokenInvalid ? "GitHub rejected this token. Sign in again or update the token below." : undefined}>
+          <Status ok={!user.tokenInvalid}>{user.pat ? "Personal access token" : "Your GitHub sign-in"}</Status>
+        </Row>
+        <PatForm savedPat={savedPat} />
+        <Row label="API budget">
           {rate ? (
             <span className="font-mono text-xs">
               {fmtNumber(rate.remaining)}/{fmtNumber(rate.limit)} calls · resets {fmtIn(rate.resetAt)}
@@ -102,27 +107,19 @@ async function SettingsSections() {
             <Status ok={false}>No calls yet</Status>
           )}
         </Row>
-        {providers.map((p) => (
-          <Row key={p.id} label={p.label} hint={p.keyEnv ? undefined : p.hint}>
-            <Status ok={!!p.keyEnv}>{p.keyEnv ? <span className="font-mono text-xs">{p.keyEnv}</span> : "No key"}</Status>
-          </Row>
-        ))}
-        <Row label="Email delivery" hint="On hold: copy the summary or Markdown from Reports instead.">
-          <Status ok={false}>Paused</Status>
-        </Row>
       </Section>
 
-      {session?.user && (
-        <Section title="Account">
-          <Row label="Signed in as">
-            <span className="font-mono text-xs">@{session.user.login}</span>
-          </Row>
-        </Section>
-      )}
+      <Section title="Account">
+        <Row label="Signed in as">
+          <span className="font-mono text-xs">@{user.login}</span>
+        </Row>
+        <Row label="Delete account" hint="Removes everything Pulse stores about you. To also revoke access on GitHub, see Settings → Applications there.">
+          <DeleteAccount login={user.login} />
+        </Row>
+      </Section>
     </>
   );
 }
-
 function Section({
   id,
   title,

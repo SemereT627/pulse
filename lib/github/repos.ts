@@ -1,7 +1,7 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { settings, sources } from "@/db/schema";
+import { settings, sources, type User } from "@/db/schema";
 import { gh, RATE_LIMIT_FIELDS } from "./client";
 
 const REPOS_QUERY = `
@@ -49,11 +49,11 @@ type ReposPage = {
   };
 };
 
-export async function listAccessibleRepos(): Promise<RepoNode[]> {
+export async function listAccessibleRepos(user: User): Promise<RepoNode[]> {
   const repos: RepoNode[] = [];
   let after: string | null = null;
   do {
-    const page: ReposPage = await gh<ReposPage>(REPOS_QUERY, { after });
+    const page: ReposPage = await gh<ReposPage>(user, REPOS_QUERY, { after });
     repos.push(...page.viewer.repositories.nodes);
     after = page.viewer.repositories.pageInfo.hasNextPage ? page.viewer.repositories.pageInfo.endCursor : null;
   } while (after);
@@ -61,14 +61,18 @@ export async function listAccessibleRepos(): Promise<RepoNode[]> {
 }
 
 /** Upsert every accessible repo; keeps the user's `included` / `extraBranches` choices. */
-export async function syncSources(): Promise<number> {
-  const [repos, [config]] = await Promise.all([listAccessibleRepos(), db.select().from(settings).limit(1)]);
+export async function syncSources(user: User): Promise<number> {
+  const [repos, [config]] = await Promise.all([
+    listAccessibleRepos(user),
+    db.select().from(settings).where(eq(settings.userId, user.id)),
+  ]);
   if (repos.length === 0) return 0;
 
   await db
     .insert(sources)
     .values(
       repos.map((r) => ({
+        userId: user.id,
         githubNodeId: r.id,
         owner: r.owner.login,
         name: r.name,
@@ -81,7 +85,7 @@ export async function syncSources(): Promise<number> {
       })),
     )
     .onConflictDoUpdate({
-      target: sources.githubNodeId,
+      target: [sources.userId, sources.githubNodeId],
       set: {
         owner: sql`excluded.owner`,
         name: sql`excluded.name`,
@@ -94,4 +98,11 @@ export async function syncSources(): Promise<number> {
     });
 
   return repos.length;
+}
+
+/** A new user has no repos listed yet: load them from GitHub once, so picking repos isn't an empty list. */
+export async function syncIfEmpty(user: User) {
+  const [any] = await db.select({ id: sources.id }).from(sources).where(eq(sources.userId, user.id)).limit(1);
+  if (any) return;
+  await syncSources(user).catch((e) => console.error("first repo sync failed", e));
 }
