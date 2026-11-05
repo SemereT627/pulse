@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { signIn } from "@/auth";
 import { Logo } from "@/components/logo";
 
@@ -31,8 +32,12 @@ export default function SignInPage({ searchParams }: PageProps<"/signin">) {
         </form>
 
         <p className="text-xs text-muted">
-          Pulse asks GitHub for read access to your repos to count your work. Company repos may need your
-          organization to approve Pulse, or a personal access token in Settings.
+          GitHub will ask for access to your repos, including private ones. GitHub only offers that as full access;
+          Pulse only reads your activity and never changes your code. Company repos may need your organization to
+          approve Pulse, or a personal access token in Settings.{" "}
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-foreground">
+            Privacy
+          </Link>
         </p>
       </div>
     </main>

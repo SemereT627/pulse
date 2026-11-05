@@ -19,9 +19,12 @@ function authorized(request: Request) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+const FAN_OUT = 10;
+
 /**
- * Vercel Cron calls this daily at 12:00 UTC (see vercel.json). For each user whose report day it is (in their
- * timezone), it saves the last finished week. `?week=YYYY-MM-DD&user=<login>` regenerates one user's week any day.
+ * Vercel Cron calls this daily at 12:00 UTC (see vercel.json). Without `user`, it calls itself once per user
+ * (`?user=<login>`), so each user gets their own function run and time budget; each run saves the last finished
+ * week if it's that user's report day (in their timezone). `?week=YYYY-MM-DD&user=<login>` regenerates one week any day.
  */
 export async function GET(request: Request) {
   if (!authorized(request)) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,15 +45,34 @@ export async function GET(request: Request) {
       ),
     );
 
-  // ponytail: users run one after another inside one 300s call; split into a request per user when this stops fitting.
-  const results = [];
-  for (const user of rows) {
+  if (login) {
+    const user = rows[0];
+    if (!user) return Response.json({ error: `No active user ${login}` }, { status: 404 });
     try {
-      results.push({ user: user.id, ...(await runFor(user, param)) });
+      return Response.json({ user: user.id, ...(await runFor(user, param)) });
     } catch (e) {
       console.error(`cron: user ${user.id} failed`, e);
-      results.push({ user: user.id, error: e instanceof Error ? e.message : "failed" });
+      return Response.json({ user: user.id, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
     }
+  }
+
+  // The production domain, not the request's *.vercel.app host, which Deployment Protection puts behind a login.
+  const base = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : new URL(request.url).origin;
+  const results: unknown[] = [];
+  for (let i = 0; i < rows.length; i += FAN_OUT) {
+    const batch = rows.slice(i, i + FAN_OUT).map(async (user) => {
+      try {
+        const res = await fetch(`${base}/api/cron/weekly?user=${encodeURIComponent(user.login)}`, {
+          headers: { authorization: request.headers.get("authorization") ?? "" },
+        });
+        return await res.json();
+      } catch (e) {
+        return { user: user.id, error: e instanceof Error ? e.message : "request failed" };
+      }
+    });
+    results.push(...(await Promise.all(batch)));
   }
   return Response.json({ users: results.length, results });
 }
