@@ -7,7 +7,8 @@ import { reports } from "@/db/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { SummaryCard } from "@/components/summary-card";
 import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, Skeleton } from "@/components/ui";
-import { aiReady, getAiKeys } from "@/lib/ai/providers";
+import { AiKeyNotice } from "@/components/ai-key-notice";
+import { aiReady, getAiKeys, PROVIDERS } from "@/lib/ai/providers";
 import { getReport, isEdited, markdownOptions } from "@/lib/report/generate";
 import { loadWeek } from "@/lib/report/load";
 import { toMarkdown } from "@/lib/report/markdown";
@@ -86,6 +87,11 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
               isCurrent={isCurrent}
               aiOn={aiOn}
               edited={isEdited(report?.narrativeModel ?? null)}
+              keyNotice={
+                keys[settings.aiProvider] ? undefined : (
+                  <AiKeyNotice provider={PROVIDERS[settings.aiProvider].label} hint={PROVIDERS[settings.aiProvider].hint} />
+                )
+              }
             />
 
             <Panel title="Markdown" action={`${markdown.split("\n").length} lines`}>

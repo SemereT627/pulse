@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AiKeyNotice } from "@/components/ai-key-notice";
 import { PageHeader, Skeleton } from "@/components/ui";
 import { getAiKeys, modelFor, PROVIDERS, type ProviderId } from "@/lib/ai/providers";
 import { decrypt, lastFour } from "@/lib/crypto";
@@ -64,6 +65,11 @@ async function SettingsSections() {
           }
           control={<Toggle name="aiEnabled" label="Write summaries" checked={settings.aiEnabled} />}
         />
+        {!active.savedKey && (
+          <div className="px-4 py-3.5">
+            <AiKeyNotice provider={active.label} hint={active.hint} linkToSettings={false} />
+          </div>
+        )}
         <AiForm settings={settings} providers={providers} />
       </Section>
 

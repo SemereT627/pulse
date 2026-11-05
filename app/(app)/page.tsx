@@ -7,7 +7,8 @@ import { RegenerateButton } from "@/components/regenerate-button";
 import { StatCards } from "@/components/stat-cards";
 import { WeekTrend } from "@/components/week-trend";
 import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, PanelLink, Skeleton, primaryButtonClass } from "@/components/ui";
-import { aiReady, getAiKeys } from "@/lib/ai/providers";
+import { AiKeyNotice } from "@/components/ai-key-notice";
+import { aiReady, getAiKeys, PROVIDERS } from "@/lib/ai/providers";
 import { deltas } from "@/lib/report/aggregate";
 import { getReport } from "@/lib/report/generate";
 import { includedSources, loadWeek } from "@/lib/report/load";
@@ -99,6 +100,11 @@ async function Overview({ searchParams }: Pick<PageProps<"/">, "searchParams">) 
           narrative={report?.narrative ?? null}
           href={`/reports${q}`}
           aiOn={aiReady(settings, keys)}
+          keyNotice={
+            keys[settings.aiProvider] ? undefined : (
+              <AiKeyNotice provider={PROVIDERS[settings.aiProvider].label} hint={PROVIDERS[settings.aiProvider].hint} />
+            )
+          }
           hasActivity={stats.repos.length > 0}
         />
       </div>
@@ -154,11 +160,13 @@ function SummaryPreview({
   href,
   aiOn,
   hasActivity,
+  keyNotice,
 }: {
   narrative: string | null;
   href: string;
   aiOn: boolean;
   hasActivity: boolean;
+  keyNotice?: React.ReactNode;
 }) {
   const first = narrative?.split(/\n{2,}/)[0];
   return (
@@ -173,8 +181,9 @@ function SummaryPreview({
               ? "Nothing to write up yet."
               : aiOn
                 ? "No summary for this week yet. Write one from your PRs and commits on the report page."
-                : "AI summaries aren't set up. Pick a provider in Settings, or export the stats as Markdown from the report."}
+                : "AI summaries are off. Write one yourself on the report page, or export the stats as Markdown."}
           </p>
+          {keyNotice}
           {hasActivity && (
             <Link href={href} className={primaryButtonClass}>
               Go to report
