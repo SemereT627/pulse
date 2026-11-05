@@ -6,6 +6,7 @@ import { EmptyState, OfflineNotice, PageHeader, Skeleton, primaryButtonClass } f
 import { loadWeek } from "@/lib/report/load";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
 import { fmtNumber, fmtRange } from "@/lib/format";
+import { currentUser } from "@/lib/session";
 import { RepoTabs } from "./tabs";
 
 export const metadata: Metadata = { title: "Repositories" };
@@ -22,8 +23,9 @@ export default function RepositoriesPage({ searchParams }: PageProps<"/repositor
 }
 
 async function Activity({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { week, isCurrent, now } = await selectedWeek(searchParams);
-  const { stats, sources, fetchedAt, fetchError } = await loadWeek(week);
+  const user = await currentUser();
+  const { week, isCurrent, now } = await selectedWeek(user, searchParams);
+  const { stats, sources, fetchedAt, fetchError } = await loadWeek(user, week);
 
   if (sources.length === 0) {
     return (

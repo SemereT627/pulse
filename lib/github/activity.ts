@@ -1,5 +1,5 @@
 import "server-only";
-import type { Source } from "@/db/schema";
+import type { Source, User } from "@/db/schema";
 import { USER_SNAPSHOT_VERSION, type Commit, type Issue, type PullRequest, type Release, type RepoSnapshot, type Review, type UserSnapshot } from "@/lib/report/types";
 import type { WeekWindow } from "@/lib/report/week";
 import { gh, RATE_LIMIT_FIELDS } from "./client";
@@ -50,18 +50,19 @@ function refAlias(alias: string, source: Source, branch: string, authorId: strin
 }
 
 /** GitHub node ids for logins; unknown logins are skipped. */
-export async function fetchUserIds(logins: string[]): Promise<string[]> {
+export async function fetchUserIds(user: User, logins: string[]): Promise<string[]> {
   if (logins.length === 0) return [];
   const fields = logins.map((l, i) => `u${i}: user(login: ${JSON.stringify(l)}) { id }`).join("\n");
-  const data = await gh<Record<string, { id: string } | null>>(`query { ${fields} ${RATE_LIMIT_FIELDS} }`).catch(() => ({}));
+  const data = await gh<Record<string, { id: string } | null>>(user, `query { ${fields} ${RATE_LIMIT_FIELDS} }`).catch(() => ({}));
   return logins.map((_, i) => (data as Record<string, { id: string } | null>)[`u${i}`]?.id).filter((id): id is string => !!id);
 }
 
 /**
- * Commits on each tracked branch by any of `authorIds` (the PAT owner first), plus the PAT owner's releases.
+ * Commits on each tracked branch by any of `authorIds` (the user first), plus the user's releases.
  * `extraAuthors` is recorded in the snapshot so changing it refetches.
  */
 export async function fetchRepoSnapshots(
+  user: User,
   sources: Source[],
   week: WeekWindow,
   authorIds: string[],
@@ -89,6 +90,7 @@ export async function fetchRepoSnapshots(
     });
 
     const data = await gh<Record<string, unknown>>(
+      user,
       `query (${QUERY_VARS}) { ${fields.join("\n")} ${RATE_LIMIT_FIELDS} }`,
       vars,
     );
@@ -103,6 +105,7 @@ export async function fetchRepoSnapshots(
             commits.push(...conn.nodes.map(toCommit));
             if (!conn.pageInfo.hasNextPage) break;
             const next = await gh<{ c: { ref: RefResult } }>(
+              user,
               `query (${QUERY_VARS}) { ${refAlias("c", s, b, a, conn.pageInfo.endCursor)} ${RATE_LIMIT_FIELDS} }`,
               vars,
             );
@@ -128,18 +131,19 @@ export async function fetchRepoSnapshots(
 // Account-wide: PRs authored, reviews given, issues — filtered to included repos later.
 // ---------------------------------------------------------------------------
 
-export async function fetchViewer(): Promise<{ id: string; login: string }> {
-  const data = await gh<{ viewer: { id: string; login: string } }>(`query { viewer { id login } ${RATE_LIMIT_FIELDS} }`);
+export async function fetchViewer(user: User): Promise<{ id: string; login: string }> {
+  const data = await gh<{ viewer: { id: string; login: string } }>(user, `query { viewer { id login } ${RATE_LIMIT_FIELDS} }`);
   return data.viewer;
 }
 
 type SearchPage<T> = { search: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: T[] } };
 
-async function searchAll<T>(query: string, fragment: string): Promise<T[]> {
+async function searchAll<T>(user: User, query: string, fragment: string): Promise<T[]> {
   const out: T[] = [];
   let after: string | null = null;
   do {
     const page: SearchPage<T> = await gh<SearchPage<T>>(
+      user,
       `query ($q: String!, $after: String) {
         search(type: ISSUE, query: $q, first: ${PAGE}, after: $after) {
           pageInfo { hasNextPage endCursor }
@@ -157,7 +161,7 @@ async function searchAll<T>(query: string, fragment: string): Promise<T[]> {
 
 const range = (week: WeekWindow) => `${week.start.toISOString().slice(0, 19)}Z..${week.end.toISOString().slice(0, 19)}Z`;
 
-export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; login: string }): Promise<UserSnapshot> {
+export async function fetchUserSnapshot(user: User, week: WeekWindow, viewer: { id: string; login: string }): Promise<UserSnapshot> {
   type Author = { __typename: string; login: string } | null;
   type PrNode = Omit<PullRequest, "repo" | "reviewers"> & {
     repository: { nameWithOwner: string };
@@ -196,6 +200,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
   const [prNodes, issueNodes, reviewData] = await Promise.all([
     // `updated:` (not `created:`) so PRs opened earlier but merged/closed this week are included.
     searchAll<PrNode>(
+      user,
       `is:pr author:${viewer.login} updated:${range(week)}`,
       `... on PullRequest {
         number title body url state isDraft createdAt mergedAt closedAt additions deletions headRefName baseRefName
@@ -204,6 +209,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
       }`,
     ),
     searchAll<IssueNode>(
+      user,
       `is:issue involves:${viewer.login} updated:${range(week)}`,
       `... on Issue {
         number title url createdAt closedAt
@@ -213,6 +219,7 @@ export async function fetchUserSnapshot(week: WeekWindow, viewer: { id: string; 
       }`,
     ),
     gh<ReviewData>(
+      user,
       `query ($from: DateTime!, $to: DateTime!) {
         viewer {
           contributionsCollection(from: $from, to: $to) {

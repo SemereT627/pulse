@@ -1,19 +1,21 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { SummaryCard } from "@/components/summary-card";
 import { EmptyState, LiveDot, OfflineNotice, PageHeader, Panel, Skeleton } from "@/components/ui";
-import { aiReady } from "@/lib/ai/providers";
+import { AiKeyNotice } from "@/components/ai-key-notice";
+import { aiReady, getAiKeys, PROVIDERS } from "@/lib/ai/providers";
 import { getReport, isEdited, markdownOptions } from "@/lib/report/generate";
 import { loadWeek } from "@/lib/report/load";
 import { toMarkdown } from "@/lib/report/markdown";
 import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
 import { weekQuery } from "@/lib/report/week";
 import { fmtRange } from "@/lib/format";
+import { currentUser } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Reports" };
 
@@ -26,11 +28,16 @@ export default function ReportsPage({ searchParams }: PageProps<"/reports">) {
 }
 
 async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
-  const { settings, now, current, week, isCurrent } = await selectedWeek(searchParams);
-  const [{ stats, sources, fetchedAt, fetchError }, report] = await Promise.all([loadWeek(week), getReport(week.startDate)]);
+  const user = await currentUser();
+  const { settings, now, current, week, isCurrent } = await selectedWeek(user, searchParams);
+  const [{ stats, sources, fetchedAt, fetchError }, report, keys] = await Promise.all([
+    loadWeek(user, week),
+    getReport(user, week.startDate),
+    getAiKeys(user.id),
+  ]);
   const narrative = report?.narrative ?? null;
-  const markdown = toMarkdown(stats, week, markdownOptions(settings, narrative));
-  const aiOn = aiReady(settings);
+  const markdown = toMarkdown(stats, week, markdownOptions(user, settings, narrative));
+  const aiOn = aiReady(settings, keys);
   const savedAt = report
     ? new Intl.DateTimeFormat("en-US", {
         timeZone: settings.timezone,
@@ -59,8 +66,8 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
           title={fmtRange(week.startDate, week.endDate)}
           description={
             savedAt
-              ? `Saved ${savedAt} by ${report!.trigger === "cron" ? "the Friday cron" : "you"}${report!.narrativeModel ? ` · summary: ${report!.narrativeModel}` : ""}`
-              : "Not saved yet. The Friday cron saves each finished week; writing a summary saves it too."
+              ? `Saved ${savedAt} by ${report!.trigger === "cron" ? "the automatic report" : "you"}${report!.narrativeModel ? ` · summary: ${report!.narrativeModel}` : ""}`
+              : "Not saved yet. The automatic report saves each finished week on your report day; writing a summary saves it too."
           }
           actions={
             <ExportButtons markdown={markdown} filename={`pulse-${week.startDate}_to_${week.endDate}.md`} />
@@ -80,6 +87,11 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
               isCurrent={isCurrent}
               aiOn={aiOn}
               edited={isEdited(report?.narrativeModel ?? null)}
+              keyNotice={
+                keys[settings.aiProvider] ? undefined : (
+                  <AiKeyNotice provider={PROVIDERS[settings.aiProvider].label} hint={PROVIDERS[settings.aiProvider].hint} />
+                )
+              }
             />
 
             <Panel title="Markdown" action={`${markdown.split("\n").length} lines`}>
@@ -94,14 +106,14 @@ async function Report({ searchParams }: { searchParams: WeekSearchParams }) {
       <aside className="space-y-3">
         <h2 className="font-mono text-xs uppercase tracking-[0.16em] text-muted">Archive</h2>
         <Suspense fallback={<Skeleton className="h-64" />}>
-          <Archive selected={week.startDate} current={current.startDate} />
+          <Archive userId={user.id} selected={week.startDate} current={current.startDate} />
         </Suspense>
       </aside>
     </div>
   );
 }
 
-async function Archive({ selected, current }: { selected: string; current: string }) {
+async function Archive({ userId, selected, current }: { userId: number; selected: string; current: string }) {
   const rows = await db
     .select({
       weekStart: reports.weekStart,
@@ -110,6 +122,7 @@ async function Archive({ selected, current }: { selected: string; current: strin
       hasNarrative: sql<boolean>`${reports.narrative} is not null`,
     })
     .from(reports)
+    .where(eq(reports.userId, userId))
     .orderBy(desc(reports.weekStart))
     .limit(52);
 

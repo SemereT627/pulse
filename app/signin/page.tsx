@@ -9,7 +9,7 @@ export default function SignInPage({ searchParams }: PageProps<"/signin">) {
         <div className="space-y-2">
           <Logo className="[&_svg]:size-9 [&>span]:text-3xl" />
           <h1 className="pt-4 font-display text-2xl font-semibold tracking-tight">Weekly GitHub report</h1>
-          <p className="text-sm text-muted">Your commits, PRs and reviews, Friday to Thursday.</p>
+          <p className="text-sm text-muted">Your commits, PRs and reviews each week, and an update for your manager.</p>
         </div>
 
         <Suspense>
@@ -29,6 +29,11 @@ export default function SignInPage({ searchParams }: PageProps<"/signin">) {
             Sign in with GitHub
           </button>
         </form>
+
+        <p className="text-xs text-muted">
+          Pulse asks GitHub for read access to your repos to count your work. Company repos may need your
+          organization to approve Pulse, or a personal access token in Settings.
+        </p>
       </div>
     </main>
   );
@@ -40,7 +45,7 @@ async function SignInError({ searchParams }: Pick<PageProps<"/signin">, "searchP
 
   return (
     <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-      {error === "AccessDenied" ? "This GitHub account isn't on the allowlist." : "Sign-in failed. Try again."}
+      {error === "AccessDenied" ? "GitHub sign-in was cancelled." : "Sign-in failed. Try again."}
     </p>
   );
 }

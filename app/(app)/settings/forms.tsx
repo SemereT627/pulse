@@ -3,12 +3,21 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import type { Settings } from "@/db/schema";
 import { primaryButtonClass, buttonClass } from "@/components/ui";
-import { saveSettingsAction, testProviderAction, type SaveState } from "./actions";
+import {
+  deleteAccountAction,
+  removeAiKeyAction,
+  removePatAction,
+  savePatAction,
+  saveSettingsAction,
+  testProviderAction,
+  type SaveState,
+} from "./actions";
 
 const field =
   "h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-muted";
 
-type ProviderInfo = { id: Settings["aiProvider"]; label: string; defaultModel: string; hint: string; keyEnv: string | null };
+/** `savedKey` is masked ("•••• abcd"); the key itself never reaches the browser. */
+type ProviderInfo = { id: Settings["aiProvider"]; label: string; defaultModel: string; hint: string; savedKey: string | null };
 
 function SectionForm({ section, children }: { section: string; children: React.ReactNode }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveSettingsAction, {});
@@ -59,6 +68,7 @@ export function AiForm({ settings, providers }: { settings: Settings; providers:
   const [test, setTest] = useState<{ ok?: string; error?: string }>({});
   const [testing, startTest] = useTransition();
   const current = providers.find((p) => p.id === provider)!;
+  const [removing, startRemove] = useTransition();
 
   const runTest = () =>
     startTest(async () => {
@@ -73,11 +83,7 @@ export function AiForm({ settings, providers }: { settings: Settings; providers:
 
   return (
     <SectionForm section="ai">
-      <Field
-        label="Provider"
-        htmlFor="aiProvider"
-        hint={current.keyEnv ? `Key from ${current.keyEnv}` : `No key yet: add ${current.hint}`}
-      >
+      <Field label="Provider" htmlFor="aiProvider">
         <div className="flex gap-2">
           <select
             id="aiProvider"
@@ -93,17 +99,48 @@ export function AiForm({ settings, providers }: { settings: Settings; providers:
             {providers.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}
-                {p.keyEnv ? "" : " (no key)"}
+                {p.savedKey ? "" : " (no key)"}
               </option>
             ))}
           </select>
-          <button type="button" onClick={runTest} disabled={testing || !current.keyEnv} className={`${buttonClass} shrink-0`}>
+          <button type="button" onClick={runTest} disabled={testing || !current.savedKey} className={`${buttonClass} shrink-0`}>
             {testing ? "Testing…" : "Test"}
           </button>
         </div>
         {(test.ok || test.error) && (
           <p className={`mt-1.5 text-xs ${test.error ? "text-danger" : "text-accent"}`}>{test.error ?? test.ok}</p>
         )}
+      </Field>
+      <Field
+        label="API key"
+        htmlFor="aiKey"
+        hint={
+          current.savedKey
+            ? "Saved and encrypted. Paste a new one to replace it."
+            : `Your own key; summaries are billed to your account. Get one at ${current.hint}.`
+        }
+      >
+        <div className="flex gap-2">
+          <input
+            id="aiKey"
+            name="aiKey"
+            key={provider}
+            type="password"
+            autoComplete="off"
+            placeholder={current.savedKey ?? "Paste your key"}
+            className={`${field} font-mono text-xs`}
+          />
+          {current.savedKey && (
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => startRemove(() => removeAiKeyAction(provider))}
+              className={`${buttonClass} shrink-0`}
+            >
+              Remove
+            </button>
+          )}
+        </div>
       </Field>
       <Field label="Model" htmlFor="aiModel" hint={`Leave empty for ${current.defaultModel}. Test the connection to list models.`}>
         <input
@@ -144,7 +181,7 @@ export function AiForm({ settings, providers }: { settings: Settings; providers:
           defaultValue={settings.aiInstructions ?? ""}
           rows={3}
           maxLength={2000}
-          placeholder="Refer to the project as OmniFleet. Mention blockers if a PR stayed open."
+          placeholder="Call the project by its product name. Mention blockers if a PR stayed open."
           className={`${field} h-auto py-2`}
         />
       </Field>
@@ -170,7 +207,7 @@ export function CountsForm({ settings }: { settings: Settings }) {
           id="extraAuthorLogins"
           name="extraAuthorLogins"
           defaultValue={settings.extraAuthorLogins.join(", ")}
-          placeholder="SemereT627"
+          placeholder="my-other-account"
           autoComplete="off"
           className={`${field} font-mono text-xs`}
         />
@@ -197,7 +234,7 @@ const SECTION_LABELS: Record<string, string> = {
   releases: "Releases",
 };
 
-export function ReportForm({ settings, envAuthor, cronTime }: { settings: Settings; envAuthor: string | null; cronTime: string }) {
+export function ReportForm({ settings, defaultAuthor, cronTime }: { settings: Settings; defaultAuthor: string; cronTime: string }) {
   return (
     <SectionForm section="report">
       <Field label="Your name" htmlFor="reportAuthor" hint="Shown in the report's title.">
@@ -205,7 +242,7 @@ export function ReportForm({ settings, envAuthor, cronTime }: { settings: Settin
           id="reportAuthor"
           name="reportAuthor"
           defaultValue={settings.reportAuthor ?? ""}
-          placeholder={envAuthor ?? "Your name"}
+          placeholder={defaultAuthor}
           maxLength={100}
           className={field}
         />
@@ -227,6 +264,134 @@ export function ReportForm({ settings, envAuthor, cronTime }: { settings: Settin
         </select>
       </Field>
     </SectionForm>
+  );
+}
+
+export function WeekForm({ settings, timezones }: { settings: Settings; timezones: string[] }) {
+  return (
+    <SectionForm section="week">
+      <Field label="Week starts" htmlFor="weekStartDay" hint="Runs seven days from 00:00 on this day.">
+        <select id="weekStartDay" name="weekStartDay" defaultValue={settings.weekStartDay} className={field}>
+          {DAYS.map((d, i) => (
+            <option key={d} value={i}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Timezone" htmlFor="timezone" hint="Changing either one shifts week boundaries; saved reports keep their old weeks.">
+        <input
+          id="timezone"
+          name="timezone"
+          defaultValue={settings.timezone}
+          list="timezones"
+          autoComplete="off"
+          className={`${field} font-mono text-xs`}
+        />
+        <datalist id="timezones">
+          {timezones.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+      </Field>
+    </SectionForm>
+  );
+}
+
+/** Optional PAT: used instead of the sign-in token, e.g. when an org hasn't approved Pulse. */
+export function PatForm({ savedPat }: { savedPat: string | null }) {
+  const [state, action, pending] = useActionState<SaveState, FormData>(savePatAction, {});
+  const [removing, startRemove] = useTransition();
+  return (
+    <form action={action}>
+      <Field
+        label="Personal access token"
+        htmlFor="pat"
+        hint={
+          savedPat
+            ? "In use instead of your sign-in. Remove it to go back."
+            : "Optional. Classic token with repo and read:org, from the account you signed in with. Reaches org repos that haven't approved Pulse."
+        }
+      >
+        <div className="flex gap-2">
+          <input
+            id="pat"
+            name="pat"
+            type="password"
+            autoComplete="off"
+            placeholder={savedPat ?? "ghp_…"}
+            className={`${field} font-mono text-xs`}
+          />
+          <button type="submit" disabled={pending} className={`${primaryButtonClass} shrink-0`}>
+            {pending ? "Checking…" : "Save"}
+          </button>
+          {savedPat && (
+            <button
+              type="button"
+              disabled={removing}
+              onClick={() => startRemove(() => removePatAction())}
+              className={`${buttonClass} shrink-0`}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        {(state.error || state.ok) && (
+          <p aria-live="polite" className={`mt-1.5 text-xs ${state.error ? "text-danger" : "text-accent"}`}>
+            {state.error ?? "Saved"}
+          </p>
+        )}
+      </Field>
+    </form>
+  );
+}
+
+export function DeleteAccount({ login }: { login: string }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className={`${buttonClass} text-danger`}>
+        Delete my account
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <p className="max-w-xs text-left text-xs text-muted">
+        Deletes your settings, repos, reports, tokens and keys from Pulse. This can&apos;t be undone. Type{" "}
+        <span className="font-mono text-foreground">{login}</span> to confirm.
+      </p>
+      <div className="flex gap-2">
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          aria-label="Your GitHub username"
+          autoComplete="off"
+          className={`${field} w-44 font-mono text-xs`}
+        />
+        <button
+          type="button"
+          disabled={pending || typed.trim().toLowerCase() !== login.toLowerCase()}
+          onClick={() =>
+            start(async () => {
+              const result = await deleteAccountAction(typed);
+              if (result?.error) setError(result.error);
+            })
+          }
+          className={`${buttonClass} text-danger`}
+        >
+          {pending ? "Deleting…" : "Delete"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className={buttonClass}>
+          Cancel
+        </button>
+      </div>
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
   );
 }
 

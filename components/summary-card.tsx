@@ -14,12 +14,14 @@ type Props = {
   aiOn: boolean;
   /** The summary has hand edits that a rewrite would replace. */
   edited: boolean;
+  /** Shown under the empty state when the user hasn't added an AI key. */
+  keyNotice?: React.ReactNode;
 };
 
 const btn =
   "rounded-md border border-border px-3 py-1.5 font-mono text-xs text-muted transition-colors hover:bg-background hover:text-foreground disabled:opacity-50";
 
-export function SummaryCard({ weekStart, narrative, hasActivity, isCurrent, aiOn, edited }: Props) {
+export function SummaryCard({ weekStart, narrative, hasActivity, isCurrent, aiOn, edited, keyNotice }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null); // null = not editing
@@ -38,7 +40,11 @@ export function SummaryCard({ weekStart, narrative, hasActivity, isCurrent, aiOn
     if (edited && !window.confirm("Rewrite will replace your edits with a new AI summary. Continue?")) return;
     run(() => writeSummaryAction(weekStart));
   };
-  const save = () => run(() => saveSummaryAction(weekStart, draft ?? ""), () => setDraft(null));
+  const save = () =>
+    run(
+      () => saveSummaryAction(weekStart, draft ?? ""),
+      () => setDraft(null),
+    );
   const copy = async () => {
     await navigator.clipboard.writeText(narrative ?? "");
     setCopied(true);
@@ -114,15 +120,18 @@ export function SummaryCard({ weekStart, narrative, hasActivity, isCurrent, aiOn
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted">
-            {!hasActivity
-              ? "Nothing to summarize yet."
-              : isCurrent
-                ? "Week still in progress. You can write a draft now and change it later."
-                : aiOn
-                  ? "Turn this week's PRs and commits into a few paragraphs for your manager, or write them yourself."
-                  : "Write a few paragraphs for your manager, or set up an AI provider in Settings to draft them."}
-          </p>
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              {!hasActivity
+                ? "Nothing to summarize yet."
+                : isCurrent
+                  ? "Week still in progress. You can write a draft now and change it later."
+                  : aiOn
+                    ? "Turn this week's PRs and commits into a few paragraphs for your manager, or write them yourself."
+                    : "Write a few paragraphs for your manager, or let AI draft them."}
+            </p>
+            {keyNotice}
+          </div>
         )}
         {error && <p className="mt-3 text-sm text-danger">{error}</p>}
       </div>
