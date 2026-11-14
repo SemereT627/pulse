@@ -48,15 +48,18 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 
 `pnpm dev` · `pnpm test` · `pnpm lint` · `pnpm build` · `pnpm db:generate` / `pnpm db:migrate` (reads `.env.local`)
 
-## Status (2026-10-30)
+## Status (2026-11-14)
 
-Done and pushed: sign-in, sources page, fetching + cache, aggregation, multi-section dashboard (sidebar, Overview/Reports/Repositories/Contributors/Settings), Markdown export, cron, multi-provider AI summary, configurable settings. 26 tests.
+Live at https://pulse.semere.app (Vercel project `pulse`, scope `semere-talegngetas-projects`, Hobby; DNS on Cloudflare). Pushes to `main` on `SemereT627/pulse` deploy production. 4 users as of 2026-11-14. Done: multi-user with per-user tokens, settings and AI keys; dashboard sections; editable summaries; Markdown export; per-user cron fan-out (verified on production 2026-11-14); privacy page.
 
-Next:
-- AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary; verified live 2026-10-31 on last week's data). Also keyed (local + Vercel), checked 2026-10-31: Gemini works (`gemini-3.8-flash` often 503s under load), OpenRouter works; Anthropic, OpenAI and DeepSeek keys are valid but those accounts have no credit; GitHub Models untested (intercepted on the dev network). Keys in `.env.local` and Vercel. The dev machine is often on a flaky phone hotspot (GitHub/Neon timeouts, `models.github.ai` intercepted), so prefer testing on production. Smoke: `SMOKE_PROVIDER=groq pnpm vitest run -c .smoke/vitest.config.mts .smoke/ai.test.ts`.
-- Deployed (2026-10-31) to Vercel project `pulse` (scope `semere-talegngetas-projects`, Hobby), https://pulse-pied-theta.vercel.app. Cron `0 12 * * *` registered. Git-connected to `SemereT627/pulse`: pushes to `main` deploy to production automatically.
-- `pulse.semere.app` added to the project; DNS is on Cloudflare (record via Vercel's Domain Connect link, or CNAME like the other subdomains). Then `vercel domains verify pulse.semere.app`.
-- One GitHub OAuth app ("Pulse") serves local and production (it has both redirect URIs); its credentials are in Vercel. Since 2026-11-05 it's owned by the GitHub org `pulse-weekly` (owner: SemereT627), so the consent screen says "Authorize pulse-weekly"; it moved there from `semere-wazza` with the same client ID and secret.
-- The old `GITHUB_PAT` (expires 2027-10-30) is copied, encrypted, into `semere-wazza`'s `users.pat` during the multi-user rollout; `GITHUB_PAT`, `ALLOWED_USERS`, `REPORT_NAME` and provider `*_API_KEY` env vars are no longer read.
+Ops notes:
+- Production env vars: `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `DATABASE_URL`, `CRON_SECRET`, `ENCRYPTION_KEY`. Nothing else is read.
+- One GitHub OAuth app ("Pulse", owned by org `pulse-weekly`, owner SemereT627) serves local and production with both redirect URIs.
+- Semere's AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary), key saved in their Settings; Gemini also saved. Earlier keys leaked in chat on 2026-10-31; Groq rotated 2026-11-12, the rest (Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, GitHub Models token) still to rotate on the providers' sites.
+- `GITHUB_PAT` in `.env.local` is semere-wazza's PAT (expires 2027-10-30); the app uses the encrypted copy in `users.pat`.
+- Vercel Hobby keeps runtime logs for 1 hour, so check cron results by calling it (`Authorization: Bearer $CRON_SECRET`), not by reading old logs.
+- The dev machine is often on a flaky phone hotspot (GitHub/Neon timeouts, `models.github.ai` intercepted); prefer testing on production.
+- `.smoke/` scripts predate multi-user (they assume env AI keys and a single user) and need updating before use.
 - Email (Resend) is paused by choice: the user copies the summary/Markdown from Reports. Don't build it unless asked.
-- To count `SemereT627` commits in `semere-wazza`'s reports, add it under Settings → What counts.
+
+Next (agreed 2026-11-14): GitHub App instead of the OAuth app (read-only repo access), then monthly/quarterly/yearly summaries. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.
