@@ -16,14 +16,18 @@ import { selectedWeek, type WeekSearchParams } from "@/lib/report/selected";
 import { weekQuery } from "@/lib/report/week";
 import { fmtRange } from "@/lib/format";
 import { currentUser } from "@/lib/session";
+import { ReportTabs } from "./tabs";
 
 export const metadata: Metadata = { title: "Reports" };
 
 export default function ReportsPage({ searchParams }: PageProps<"/reports">) {
   return (
-    <Suspense fallback={<ReportSkeleton />}>
-      <Report searchParams={searchParams} />
-    </Suspense>
+    <div className="space-y-6">
+      <ReportTabs />
+      <Suspense fallback={<ReportSkeleton />}>
+        <Report searchParams={searchParams} />
+      </Suspense>
+    </div>
   );
 }
 

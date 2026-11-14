@@ -1,13 +1,24 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { generateNarrative } from "@/lib/ai/narrative";
 import { getAiKeys } from "@/lib/ai/providers";
 import { getSettings, loadWeek } from "./load";
 import { toMarkdown } from "./markdown";
+import type { WeekStats } from "./types";
 import { previousWeek, type WeekWindow } from "./week";
 import type { Settings, User } from "@/db/schema";
+
+/** The user's saved weekly reports, oldest first: what period summaries are built from. */
+export async function savedReports(user: Pick<User, "id">) {
+  const rows = await db
+    .select({ weekStart: reports.weekStart, weekEnd: reports.weekEnd, narrative: reports.narrative, stats: reports.stats })
+    .from(reports)
+    .where(eq(reports.userId, user.id))
+    .orderBy(asc(reports.weekStart));
+  return rows.map((r) => ({ ...r, stats: r.stats as WeekStats }));
+}
 
 export async function getReport(user: Pick<User, "id">, weekStart: string) {
   const [row] = await db

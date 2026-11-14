@@ -12,7 +12,7 @@ export function WeekPicker({ weeks, current }: { weeks: string[]; current: strin
   const router = useRouter();
   const pathname = usePathname();
   const param = useSearchParams().get("week");
-  if (!navItemFor(pathname)?.weekScoped || pathname.startsWith("/repositories/manage")) return null;
+  if (!navItemFor(pathname)?.weekScoped || pathname.startsWith("/repositories/manage") || pathname.startsWith("/reports/periods")) return null;
 
   // The server snaps odd dates to a week start; mirror that for the known weeks and trust the rest.
   const selected = param && param < current ? (weeks.find((w) => w <= param && param < addDays(w, 7)) ?? param) : current;

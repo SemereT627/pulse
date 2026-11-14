@@ -27,6 +27,7 @@ Next.js 16 (App Router, **Cache Components on**, `proxy.ts` instead of middlewar
 - `lib/report/`: pure `week.ts`, `aggregate.ts`, `markdown.ts` (unit-tested); `load.ts` (snapshot cache: in-progress week refetches after 15 min, branch-config change refetches that repo); `generate.ts` (writes `reports` rows).
 - `lib/report/collaborators.ts`: pure; people from my PRs' reviewers + authors of PRs I reviewed (Contributors page). `UserSnapshot.v` (`USER_SNAPSHOT_VERSION`) forces a refetch of cached user snapshots when fields are added.
 - Summaries are editable on Reports (`saveSummaryAction`); hand edits mark `narrativeModel` with " · edited" or "Written by you" (`lib/report/edited.ts`), and Rewrite asks before replacing them. The cron never overwrites an existing summary.
+- Period summaries (`/reports/periods`, Reports → Summaries): month/quarter/year totals summed from saved `reports` rows, and an on-demand AI summary (`writePeriodSummaryAction`, prompts in `lib/ai/summary.ts`, periods in `lib/report/periods.ts`). Not stored; the user edits and copies it. A week counts toward the period it starts in.
 - `lib/report/selected.ts`: `selectedWeek(searchParams)` resolves `?week=YYYY-MM-DD` (snapped, future → current); every week-scoped page uses it.
 - `lib/ai/summary.ts`: pure prompt builders (tested); `narrative.ts`: calls the provider; `providers.ts`: provider table, `complete()`, `listModels()` (Settings "Test" button).
 - UI: dashboard shell in `app/(app)/layout.tsx` + `components/shell/` (sidebar, top bar with week picker and user menu, mobile drawer). Sections: `/` Overview, `/reports` (report + archive), `/repositories` (activity) and `/repositories/manage` (tracked repos), `/contributors`, `/settings` (cron/AI toggles, connection status). Selected week lives in `?week=`; sidebar links carry it. Old `/week/:week` and `/sources` redirect in `next.config.ts`.
@@ -58,8 +59,9 @@ Ops notes:
 - Semere's AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary), key saved in their Settings; Gemini also saved. Earlier keys leaked in chat on 2026-10-31; Groq rotated 2026-11-12, the rest (Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, GitHub Models token) still to rotate on the providers' sites.
 - `GITHUB_PAT` in `.env.local` is semere-wazza's PAT (expires 2027-10-30); the app uses the encrypted copy in `users.pat`.
 - Vercel Hobby keeps runtime logs for 1 hour, so check cron results by calling it (`Authorization: Bearer $CRON_SECRET`), not by reading old logs.
+- Locally, `next start` (production build) needs `AUTH_TRUST_HOST=true`, or Auth.js rejects every session (UntrustedHost); `next dev` and Vercel trust the host already.
 - The dev machine is often on a flaky phone hotspot (GitHub/Neon timeouts, `models.github.ai` intercepted); prefer testing on production.
 - `.smoke/` scripts predate multi-user (they assume env AI keys and a single user) and need updating before use.
 - Email (Resend) is paused by choice: the user copies the summary/Markdown from Reports. Don't build it unless asked.
 
-Next (agreed 2026-11-14): GitHub App instead of the OAuth app (read-only repo access), then monthly/quarterly/yearly summaries. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.
+Next (agreed 2026-11-14): GitHub App instead of the OAuth app (read-only repo access); waiting on Semere to create the app. Period summaries shipped 2026-11-14. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.

@@ -5,7 +5,9 @@ import { refresh } from "next/cache";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { aiReady, getAiKeys, noKey } from "@/lib/ai/providers";
-import { editedModel, generateReport, getReport, markdownOptions } from "@/lib/report/generate";
+import { generatePeriodNarrative } from "@/lib/ai/narrative";
+import { editedModel, generateReport, getReport, markdownOptions, savedReports } from "@/lib/report/generate";
+import { isPeriodKey, periodKey, periodLabel, PERIOD_KINDS, type PeriodKind } from "@/lib/report/periods";
 import { toMarkdown } from "@/lib/report/markdown";
 import type { WeekStats } from "@/lib/report/types";
 import { expireWeek, getSettings } from "@/lib/report/load";
@@ -66,4 +68,19 @@ export async function saveSummaryAction(weekStart: string, text: string): Promis
   }
   refresh();
   return {};
+}
+
+/** Writes a month/quarter/year summary from that period's saved weekly reports. Not stored: the user copies it. */
+export async function writePeriodSummaryAction(kind: PeriodKind, key: string): Promise<{ text?: string; model?: string; error?: string }> {
+  const user = await requireUser();
+  if (!PERIOD_KINDS.includes(kind) || !isPeriodKey(key, kind)) return { error: "Invalid period" };
+  const [settings, keys, rows] = await Promise.all([getSettings(user), getAiKeys(user.id), savedReports(user)]);
+  if (!aiReady(settings, keys)) return { error: noKey(settings.aiProvider) };
+  const weeks = rows.filter((r) => periodKey(r.weekStart, kind) === key);
+  if (weeks.length === 0) return { error: "No saved weekly reports in this period." };
+  try {
+    return await generatePeriodNarrative(periodLabel(key), weeks, settings, keys[settings.aiProvider]);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't write the summary." };
+  }
 }

@@ -57,3 +57,42 @@ export function userPrompt(stats: WeekStats, previousNarrative: string | null): 
   const previous = previousNarrative ? `Last week's update, for context:\n\n${previousNarrative}\n\n---\n\n` : "";
   return `${previous}Here is my GitHub activity (pull requests and commits) for the week:\n\n${activityPrompt(stats)}`;
 }
+
+const PERIOD_LENGTH: Record<Settings["aiLength"], string> = {
+  short: "Keep it to 2-3 paragraphs.",
+  medium: "Write 3-5 paragraphs.",
+  long: "Write 5-8 paragraphs, with enough detail for someone outside the team.",
+};
+
+// Each week's text is capped so a year of weeks stays within smaller models' context.
+const MAX_WEEK_CHARS = 2500;
+
+export type PeriodWeek = { weekStart: string; weekEnd: string; narrative: string | null; stats: WeekStats };
+
+/** System prompt for a month/quarter/year summary written from weekly reports. */
+export function periodSystemPrompt(opts: PromptOptions, periodLabel: string): string {
+  const parts = [
+    `You write a summary of a software engineer's work over ${periodLabel}, for their manager or a performance review, from their weekly updates and GitHub activity.`,
+    `${TONE[opts.aiTone]} ${PERIOD_LENGTH[opts.aiLength]} Organize by project or theme, not week by week. Lead with what shipped and why it mattered, then recurring themes (reliability, reviews, collaboration). Use paragraphs, not bullet points, and don't list PR numbers or commit hashes.`,
+    "Output only the paragraphs of body text: no greeting, no sign-off, no subject line, no headings.",
+  ];
+  const extra = opts.aiInstructions?.trim();
+  if (extra) parts.push(`Additional instructions from the engineer (follow them unless they conflict with the output format):\n${extra}`);
+  return parts.join("\n\n");
+}
+
+/** One block per week: its written update if there is one, otherwise its pull requests. */
+export function periodUserPrompt(weeks: PeriodWeek[]): string {
+  const blocks = weeks.map((w) => {
+    const t = w.stats.totals;
+    const header = `Week ${w.weekStart} to ${w.weekEnd} (${t.commits} commits, ${t.prsMerged} PRs merged, ${t.reviews} reviews):`;
+    const body = w.narrative?.trim()
+      ? w.narrative.trim()
+      : w.stats.repos
+          .filter((r) => r.prs.length)
+          .map((r) => `${r.repo}: ${r.prs.map((pr) => `${pr.title} (${pr.status})`).join("; ")}`)
+          .join("\n") || "(no pull requests)";
+    return `${header}\n${body.slice(0, MAX_WEEK_CHARS)}`;
+  });
+  return `Here are my weekly updates and activity:\n\n${blocks.join("\n\n")}`;
+}
