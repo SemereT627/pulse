@@ -3,8 +3,9 @@ import type { Metadata } from "next";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sources } from "@/db/schema";
-import { EmptyState, PageHeader, Skeleton } from "@/components/ui";
-import { syncIfEmpty } from "@/lib/github/repos";
+import { EmptyState, PageHeader, Skeleton, primaryButtonClass } from "@/components/ui";
+import { GITHUB_APP_INSTALL_URL } from "@/lib/github/app";
+import { syncIfEmpty, syncSources } from "@/lib/github/repos";
 import { currentUser } from "@/lib/session";
 import { RepoTabs } from "../tabs";
 import { SourcesList } from "./sources-list";
@@ -12,7 +13,7 @@ import { SyncButton } from "./sync-button";
 
 export const metadata: Metadata = { title: "Tracked repos" };
 
-export default function ManageReposPage() {
+export default function ManageReposPage({ searchParams }: PageProps<"/repositories/manage">) {
   return (
     <div className="space-y-6">
       <RepoTabs />
@@ -22,20 +23,30 @@ export default function ManageReposPage() {
         actions={<SyncButton />}
       />
       <Suspense fallback={<ListSkeleton />}>
-        <Sources />
+        <Sources searchParams={searchParams} />
       </Suspense>
     </div>
   );
 }
 
-async function Sources() {
-  const user = await currentUser();
-  await syncIfEmpty(user);
+async function Sources({ searchParams }: Pick<PageProps<"/repositories/manage">, "searchParams">) {
+  const [user, params] = await Promise.all([currentUser(), searchParams]);
+  // GitHub sends people here (the app's Setup URL) after they install or change the app: pick up the new repos.
+  if (params.setup_action) await syncSources(user).catch((e) => console.error("post-install sync failed", e));
+  else await syncIfEmpty(user);
   const rows = await db.select().from(sources).where(eq(sources.userId, user.id)).orderBy(desc(sources.pushedAt));
   if (rows.length === 0) {
     return (
-      <EmptyState title="No repos yet">
-        Hit <span className="font-mono">Sync from GitHub</span> to load every repo your GitHub account can see.
+      <EmptyState
+        title="No repos yet"
+        action={
+          <a href={GITHUB_APP_INSTALL_URL} className={primaryButtonClass}>
+            Install Pulse Weekly on GitHub
+          </a>
+        }
+      >
+        Pulse sees the repos where its GitHub app is installed. Install it on your account and any organizations whose
+        repos should count, then come back here.
       </EmptyState>
     );
   }
@@ -48,14 +59,13 @@ async function Sources() {
 }
 
 function OrgNote() {
-  const settingsUrl = `https://github.com/settings/connections/applications/${process.env.AUTH_GITHUB_ID}`;
   return (
     <p className="text-sm text-muted">
-      Missing your company&apos;s repos? Your organization may need to approve Pulse:{" "}
-      <a href={settingsUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">
-        request access on GitHub
-      </a>
-      , or add a personal access token in{" "}
+      Missing repos? Pulse only sees repos where its GitHub app is installed:{" "}
+      <a href={GITHUB_APP_INSTALL_URL} className="underline hover:text-foreground">
+        install or configure Pulse Weekly
+      </a>{" "}
+      on your account or organization (organization owners approve installs there). Or add a personal access token in{" "}
       <a href="/settings" className="underline hover:text-foreground">
         Settings
       </a>

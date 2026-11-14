@@ -310,7 +310,7 @@ export function PatForm({ savedPat }: { savedPat: string | null }) {
         hint={
           savedPat
             ? "In use instead of your sign-in. Remove it to go back."
-            : "Optional. Classic token with repo and read:org, from the account you signed in with. Reaches org repos that haven't approved Pulse."
+            : "Optional. Classic token with repo and read:org, from the account you signed in with. Reaches org repos where the Pulse Weekly app isn't installed."
         }
       >
         <div className="flex gap-2">

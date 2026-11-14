@@ -11,6 +11,8 @@ type GitHubProfile = { id: number; login: string; name?: string | null; avatar_u
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Anyone can sign in; their own token reads their own GitHub activity.
+  // GitHub Apps ignore `scope` (access comes from the app's read-only permissions and installs).
+  // shortcut: scope only matters while AUTH_GITHUB_ID may still be the old OAuth app; drop it once that app is deleted.
   providers: [GitHub({ authorization: { params: { scope: "read:user repo read:org" } } })],
   pages: { signIn: "/signin", error: "/signin" },
   callbacks: {

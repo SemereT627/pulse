@@ -18,11 +18,11 @@ export default function PrivacyPage() {
         <section>
           <h2>GitHub access</h2>
           <p className="mt-2">
-            Signing in asks GitHub for <code className="font-mono text-sm">read:user</code>,{" "}
-            <code className="font-mono text-sm">read:org</code> and <code className="font-mono text-sm">repo</code>. GitHub
-            only offers private-repo access as <code className="font-mono text-sm">repo</code>, which also allows writing.
-            Pulse only reads: it looks up your commits, pull requests, reviews and issues, and never changes anything in
-            your repositories.
+            Pulse uses the Pulse Weekly GitHub app, which has read-only access to code, pull requests and issues, and only
+            in the accounts and organizations where you install it. It looks up your commits, pull requests, reviews and
+            issues, and never changes anything. You can remove the app or limit it to some repos at any time in GitHub →
+            Settings → Applications. People who signed in before Pulse used this app granted GitHub&apos;s broader{" "}
+            <code className="font-mono text-sm">repo</code> scope; signing in again moves them to the read-only app.
           </p>
         </section>
 
