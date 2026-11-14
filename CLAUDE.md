@@ -56,7 +56,7 @@ Live at https://pulse.semere.app (Vercel project `pulse`, scope `semere-talegnge
 Ops notes:
 - Production env vars: `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `DATABASE_URL`, `CRON_SECRET`, `ENCRYPTION_KEY`. Nothing else is read.
 - The GitHub App "Pulse Weekly" (org `pulse-weekly`, owner SemereT627) serves local and production with both callback URLs. The old OAuth app "Pulse" was deleted 2026-11-15; users who signed in with it must sign in again.
-- Semere's AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary), key saved in their Settings; Gemini also saved. Earlier keys leaked in chat on 2026-10-31; Groq rotated 2026-11-12, the rest (Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, GitHub Models token) still to rotate on the providers' sites.
+- Semere's AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary), key saved in their Settings; Gemini also saved. Earlier keys leaked in chat on 2026-10-31; Groq rotated 2026-11-12; Semere chose (2026-11-15) not to rotate the rest since those accounts are unused or unfunded. Don't raise it again.
 - `GITHUB_PAT` in `.env.local` is semere-wazza's PAT (expires 2027-10-30); the app uses the encrypted copy in `users.pat`.
 - Vercel Hobby keeps runtime logs for 1 hour, so check cron results by calling it (`Authorization: Bearer $CRON_SECRET`), not by reading old logs.
 - Locally, `next start` (production build) needs `AUTH_TRUST_HOST=true`, or Auth.js rejects every session (UntrustedHost); `next dev` and Vercel trust the host already.
