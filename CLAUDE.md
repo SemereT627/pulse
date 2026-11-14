@@ -64,4 +64,4 @@ Ops notes:
 - `.smoke/` scripts predate multi-user (they assume env AI keys and a single user) and need updating before use.
 - Email (Resend) is paused by choice: the user copies the summary/Markdown from Reports. Don't build it unless asked.
 
-Shipped 2026-11-14/15: period summaries, read-only GitHub App sign-in. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.
+Shipped 2026-11-14/15: period summaries, read-only GitHub App sign-in. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention (skipped 2026-11-15: whole DB 8.9 MB of 512 MB, snapshots 392 kB; revisit past ~100 MB), failure alerts, landing page.
