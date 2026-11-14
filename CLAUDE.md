@@ -6,7 +6,7 @@ Weekly GitHub report for any developer: sign in with GitHub, get your own commit
 
 ## Decisions (agreed, don't relitigate)
 
-- Multi-user (since 2026-11-05), open sign-up. GitHub OAuth (`read:user repo read:org`) is both sign-in and data access: the sign-in token is stored encrypted in `users.oauth_token`. Optional per-user PAT (`users.pat`, Settings → GitHub) overrides it; it must belong to the signed-in account (checked by GitHub user id). A 401 sets `users.token_invalid` (banner; cron skips). Users can delete their account (cascade).
+- Multi-user (since 2026-11-05), open sign-up. Sign-in and data access go through the GitHub App "Pulse Weekly" (since 2026-11-15; org `pulse-weekly`, app id 5762616, client `Iv23liCz2StJMzSKcnag`): read-only Contents, Metadata, Pull requests, Issues; user tokens don't expire; it only sees repos where it's installed (`GITHUB_APP_INSTALL_URL` in `lib/github/app.ts`; its Setup URL is `/repositories/manage`, which syncs on `?setup_action=`). Users who signed in earlier still hold tokens from the old OAuth app ("Pulse", `repo` scope) until they sign in again; delete that app once nobody depends on it, then drop the `scope` param in `auth.ts`. The sign-in token is stored encrypted in `users.oauth_token`. Optional per-user PAT (`users.pat`, Settings → GitHub) overrides it; it must belong to the signed-in account (checked by GitHub user id). A 401 sets `users.token_invalid` (banner; cron skips). Users can delete their account (cascade).
 - Every data table has `user_id` (FK, on delete cascade); every query and server action filters by the session user (`currentUser()` in pages, `requireUser()` in actions, both return the `users` row). Never trust an id from the client without `userId` in the `where`.
 - Secrets at rest: AES-256-GCM, `lib/crypto.ts`, key `ENCRYPTION_KEY` (env, 32 bytes base64; same value local and Vercel; changing it breaks every stored token/key). The UI shows only `•••• last4`.
 - Week = 7 days from `settings.weekStartDay` 00:00 in `settings.timezone`; both editable per user (new users: UTC, Monday). Semere's row: Africa/Addis_Ababa, Friday.
@@ -55,7 +55,7 @@ Live at https://pulse.semere.app (Vercel project `pulse`, scope `semere-talegnge
 
 Ops notes:
 - Production env vars: `AUTH_SECRET`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `DATABASE_URL`, `CRON_SECRET`, `ENCRYPTION_KEY`. Nothing else is read.
-- One GitHub OAuth app ("Pulse", owned by org `pulse-weekly`, owner SemereT627) serves local and production with both redirect URIs.
+- The GitHub App "Pulse Weekly" (org `pulse-weekly`, owner SemereT627) serves local and production with both callback URLs. The old OAuth app "Pulse" in the same org is retired but not yet deleted.
 - Semere's AI provider is Groq (`openai/gpt-oss-120b`, ~3s per summary), key saved in their Settings; Gemini also saved. Earlier keys leaked in chat on 2026-10-31; Groq rotated 2026-11-12, the rest (Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, GitHub Models token) still to rotate on the providers' sites.
 - `GITHUB_PAT` in `.env.local` is semere-wazza's PAT (expires 2027-10-30); the app uses the encrypted copy in `users.pat`.
 - Vercel Hobby keeps runtime logs for 1 hour, so check cron results by calling it (`Authorization: Bearer $CRON_SECRET`), not by reading old logs.
@@ -64,4 +64,4 @@ Ops notes:
 - `.smoke/` scripts predate multi-user (they assume env AI keys and a single user) and need updating before use.
 - Email (Resend) is paused by choice: the user copies the summary/Markdown from Reports. Don't build it unless asked.
 
-Next (agreed 2026-11-14): GitHub App instead of the OAuth app (read-only repo access); waiting on Semere to create the app. Period summaries shipped 2026-11-14. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.
+Shipped 2026-11-14/15: period summaries, read-only GitHub App sign-in. Later: test that two users can't see each other's data (on a Neon branch), snapshot retention, failure alerts, landing page.
